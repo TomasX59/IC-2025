@@ -17,3 +17,4 @@
    ```bash
    make
     ```
+2. Aceder ao novo diretório ```bin``` e correr os ficheiros compilados
