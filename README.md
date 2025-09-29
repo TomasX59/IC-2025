@@ -6,6 +6,14 @@
 
 **Parte II (1)-**
 
-**Parte III (1)-**
+**Parte III (1)- Hugo Sousa**
 
 **Parte IV (1)-**
+
+## Como usar:
+
+1. Aceder ao diretório pretendido e dentro de ```src/``` , para compilar, rodar no terminal:
+
+   ```bash
+   make
+    ```
