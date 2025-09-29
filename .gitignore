@@ -1,0 +1,21 @@
+# Ignorar pastas de build
+build/
+*/build/
+
+# Ignorar arquivos de configuração gerados pelo CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+
+# Ignorar arquivos Makefile gerados
+Makefile
+Makefile.user
+Makefile.include
+
+# Ignorar binários e executáveis gerados
+bin/
+*.out
+*.o
+*.a
+*.so
+*.exe
