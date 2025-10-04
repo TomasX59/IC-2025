@@ -45,13 +45,16 @@ int BitStream::read_bit() {
 }
 
 uint64_t BitStream::read_n_bits(int n) {
-	uint64_t x { };
-	for(int i = 0 ; i < n ; ++i) {
-		x <<= 1;
-		x |= read_bit();
-	}
-
-	return x;
+    uint64_t x { };
+    for(int i = n - 1; i >= 0; --i) {
+        int bit = read_bit();
+        if (bit == EOF) {
+            // Handle EOF properly
+            throw std::runtime_error("Reached EOF while reading bits");
+        }
+        x |= (static_cast<uint64_t>(bit) << i);
+    }
+    return x;
 }
 
 string BitStream::read_string() {

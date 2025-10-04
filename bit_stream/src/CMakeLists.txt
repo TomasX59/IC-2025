@@ -13,8 +13,22 @@ SET (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${BASE_DIR}/../bin)
 
 add_library(Common OBJECT)
 
-target_sources(Common PRIVATE bit_stream.cpp byte_stream.cpp)
+# Find required packages using pkg-config
+include(FindPkgConfig)
+pkg_check_modules(SNDFILE REQUIRED sndfile)
 
-add_executable (text2bin text2bin.cpp $<TARGET_OBJECTS:Common>)
-add_executable (bin2text bin2text.cpp $<TARGET_OBJECTS:Common>)
+# Add sources and configure Common library
+target_sources(Common PRIVATE bit_stream.cpp byte_stream.cpp dct_codec.cpp quantization.cpp)
+target_include_directories(Common PRIVATE ${SNDFILE_INCLUDE_DIRS})
+set_property(TARGET Common PROPERTY POSITION_INDEPENDENT_CODE 1)
+
+# Create executables
+add_executable(text2bin text2bin.cpp $<TARGET_OBJECTS:Common>)
+add_executable(bin2text bin2text.cpp $<TARGET_OBJECTS:Common>)
+add_executable(lossy_codec lossy_codec.cpp $<TARGET_OBJECTS:Common>)
+
+# Link libraries
+target_link_libraries(text2bin PRIVATE ${SNDFILE_LIBRARIES})
+target_link_libraries(bin2text PRIVATE ${SNDFILE_LIBRARIES})
+target_link_libraries(lossy_codec PRIVATE ${SNDFILE_LIBRARIES})
 
