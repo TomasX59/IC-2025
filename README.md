@@ -2,7 +2,7 @@
 ## Guiões de IC - distribuição do trabalho 
 ### Guião 1
 
-**Parte I (4)-**
+**Parte I (4)- Tomás Cerca Rodrigues**
 
 **Parte II (1)-**
 
