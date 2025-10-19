@@ -67,6 +67,23 @@ uint32_t magnitudeFromCoefficient(int32_t coef) {
     return static_cast<uint32_t>(std::abs(static_cast<long long>(coef)));
 }
 
+uint8_t bitsNeededForMagnitude(uint32_t magnitude) {
+    if (magnitude == 0) {
+        return 0;
+    }
+#if defined(__GNUG__)
+    constexpr uint8_t kDigits = std::numeric_limits<uint32_t>::digits;
+    return static_cast<uint8_t>(kDigits - static_cast<uint8_t>(__builtin_clz(magnitude)));
+#else
+    uint8_t bits = 0;
+    while (magnitude > 0) {
+        ++bits;
+        magnitude >>= 1;
+    }
+    return bits;
+#endif
+}
+
 } // namespace
 
 void encodeWav(const std::string &inputWav, const std::string &outputFile) {
@@ -141,7 +158,7 @@ void encodeWav(const std::string &inputWav, const std::string &outputFile) {
             maxMagnitude = std::max(maxMagnitude, magnitudeFromCoefficient(coef));
         }
         const uint8_t magnitudeBits =
-            (maxMagnitude == 0) ? 0 : static_cast<uint8_t>(std::bit_width(maxMagnitude));
+            bitsNeededForMagnitude(maxMagnitude);
 
         // Escrever o tamanho do bloco (16 bits) e os bits dedicados à magnitude (6 bits)
         bs.write_n_bits(static_cast<uint64_t>(framesRead), 16);
