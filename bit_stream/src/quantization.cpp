@@ -6,8 +6,6 @@
 #include <limits>
 #include <vector>
 
-namespace {
-
 // Tabela simples de fatores de quantização para os primeiros coeficientes.
 // Os restantes usam o último valor.
 const std::vector<double> kQuantizationTable = {
