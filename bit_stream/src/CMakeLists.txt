@@ -31,4 +31,8 @@ add_executable(lossy_codec lossy_codec.cpp $<TARGET_OBJECTS:Common>)
 target_link_libraries(text2bin PRIVATE ${SNDFILE_LIBRARIES})
 target_link_libraries(bin2text PRIVATE ${SNDFILE_LIBRARIES})
 target_link_libraries(lossy_codec PRIVATE ${SNDFILE_LIBRARIES})
+add_executable (text2bin text2bin.cpp $<TARGET_OBJECTS:Common>)
+add_executable (bin2text bin2text.cpp $<TARGET_OBJECTS:Common>)
+add_executable (wav2bin wav_quant_enc.cpp $<TARGET_OBJECTS:Common>)
+add_executable (bin2wav wav_quant_dec.cpp $<TARGET_OBJECTS:Common>)
 
