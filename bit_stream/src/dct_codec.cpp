@@ -1,57 +1,73 @@
 #include "dct_codec.h"
+
 #include <sndfile.hh>
+
 #include "bit_stream.h"
 #include "quantization.h"
-#include <iostream>
-#include <vector>
-#include <stdexcept>
-#include <cmath>
 
-// Tamanho do bloco para processamento (pode ajustar conforme necessário)
-const int BLOCK_SIZE = 1024;
+#include <algorithm>
+#include <bit>
+#include <cmath>
+#include <cstdint>
+#include <iostream>
+#include <limits>
+#include <stdexcept>
+#include <vector>
+
+constexpr std::size_t BLOCK_SIZE = 1024;
 constexpr double PI = 3.14159265358979323846;
 
-// Função para aplicar DCT Type-II em um bloco
-void applyDCT(std::vector<short>& block) {
-    std::vector<double> result(BLOCK_SIZE);
-    
-    for (int k = 0; k < BLOCK_SIZE; k++) {
+namespace {
+
+void applyDCT(const std::vector<double>& input, std::vector<double>& output) {
+    for (std::size_t k = 0; k < BLOCK_SIZE; ++k) {
         double sum = 0.0;
-        double scale = (k == 0) ? 1.0 / sqrt(BLOCK_SIZE) : sqrt(2.0 / BLOCK_SIZE);
-        
-        for (int n = 0; n < BLOCK_SIZE; n++) {
-            sum += block[n] * cos((PI * (2 * n + 1) * k) / (2 * BLOCK_SIZE));
+        const double blockSizeAsDouble = static_cast<double>(BLOCK_SIZE);
+        const double scale = (k == 0) ? 1.0 / std::sqrt(blockSizeAsDouble)
+                                      : std::sqrt(2.0 / blockSizeAsDouble);
+
+        for (std::size_t n = 0; n < BLOCK_SIZE; ++n) {
+            const double angleNumerator =
+                PI * (2.0 * static_cast<double>(n) + 1.0) * static_cast<double>(k);
+            sum += input[n] * std::cos(angleNumerator / (2.0 * blockSizeAsDouble));
         }
-        
-        result[k] = scale * sum;
-    }
-    
-    // Copiar resultados de volta para o bloco
-    for (int i = 0; i < BLOCK_SIZE; i++) {
-        block[i] = static_cast<short>(std::round(result[i]));
+
+        output[k] = scale * sum;
     }
 }
 
-// Função para aplicar IDCT Type-III em um bloco
-void applyIDCT(std::vector<short>& block) {
-    std::vector<double> result(BLOCK_SIZE);
-    
-    for (int n = 0; n < BLOCK_SIZE; n++) {
-        double sum = block[0] / sqrt(BLOCK_SIZE);
-        
-        for (int k = 1; k < BLOCK_SIZE; k++) {
-            sum += sqrt(2.0 / BLOCK_SIZE) * block[k] * 
-                  cos((PI * (2 * n + 1) * k) / (2 * BLOCK_SIZE));
+void applyIDCT(const std::vector<double>& input, std::vector<double>& output) {
+    const double blockSizeAsDouble = static_cast<double>(BLOCK_SIZE);
+    const double dcScale = 1.0 / std::sqrt(blockSizeAsDouble);
+    const double acScale = std::sqrt(2.0 / blockSizeAsDouble);
+
+    for (std::size_t n = 0; n < BLOCK_SIZE; ++n) {
+        double sum = input[0] * dcScale;
+
+        for (std::size_t k = 1; k < BLOCK_SIZE; ++k) {
+            const double angleNumerator =
+                PI * (2.0 * static_cast<double>(n) + 1.0) * static_cast<double>(k);
+            sum += acScale * input[k] * std::cos(angleNumerator / (2.0 * blockSizeAsDouble));
         }
-        
-        result[n] = sum;
-    }
-    
-    // Copiar resultados de volta para o bloco
-    for (int i = 0; i < BLOCK_SIZE; i++) {
-        block[i] = static_cast<short>(std::round(result[i]));
+
+        output[n] = sum;
     }
 }
+
+short clampToInt16(double sample) {
+    const long long rounded = std::llround(sample);
+    const long long clamped = std::clamp(
+        rounded,
+        static_cast<long long>(std::numeric_limits<int16_t>::min()),
+        static_cast<long long>(std::numeric_limits<int16_t>::max()));
+    return static_cast<short>(clamped);
+}
+
+uint32_t magnitudeFromCoefficient(int32_t coef) {
+    return static_cast<uint32_t>(std::abs(static_cast<long long>(coef)));
+}
+
+} // namespace
 
 void encodeWav(const std::string &inputWav, const std::string &outputFile) {
     // Abrir o arquivo WAV de entrada
@@ -70,7 +86,8 @@ void encodeWav(const std::string &inputWav, const std::string &outputFile) {
     if (!fs) {
         throw std::runtime_error("Erro ao criar arquivo de saída: " + outputFile);
     }
-    BitStream bs(fs, true);  // true para modo de escrita
+    fs.seekp(0); // Ir para o início do arquivo para escrita
+    BitStream bs(fs, false);  // false para modo de escrita
 
     // Escrever cabeçalho
     // 1. Sample rate (32 bits)
@@ -86,48 +103,67 @@ void encodeWav(const std::string &inputWav, const std::string &outputFile) {
     std::cout << "Frames: " << sf.frames() << "\n";
 
     // Criar buffers para as amostras
-    std::vector<short> block(BLOCK_SIZE); // Buffer para o bloco mono final
-    std::vector<short> readBuffer(BLOCK_SIZE * channels); // Buffer para leitura (mono ou estéreo)
-    
-    // Ler e processar o arquivo em blocos
+    std::vector<short> readBuffer(BLOCK_SIZE * static_cast<std::size_t>(channels));
+    std::vector<double> monoBlock(BLOCK_SIZE);
+    std::vector<double> dctCoefficients(BLOCK_SIZE);
+
     sf_count_t framesRead;
     int blockCount = 0;
-    
+
     while ((framesRead = sf.readf(readBuffer.data(), BLOCK_SIZE)) > 0) {
-        // Converter para mono se for estéreo
+        // Converter para mono (média simples) e preparar o bloco em double
         if (channels == 2) {
-            for (sf_count_t i = 0; i < framesRead; i++) {
-                // Média dos canais esquerdo e direito
-                block[i] = static_cast<short>((static_cast<int>(readBuffer[i*2]) + 
-                                             static_cast<int>(readBuffer[i*2+1])) / 2);
+            for (sf_count_t i = 0; i < framesRead; ++i) {
+                const int left = static_cast<int>(readBuffer[2 * i]);
+                const int right = static_cast<int>(readBuffer[2 * i + 1]);
+                monoBlock[static_cast<std::size_t>(i)] = static_cast<double>((left + right) / 2);
             }
         } else {
-            // Se já for mono, apenas copiar
-            std::copy(readBuffer.begin(), readBuffer.begin() + framesRead, block.begin());
+            for (sf_count_t i = 0; i < framesRead; ++i) {
+                monoBlock[static_cast<std::size_t>(i)] = static_cast<double>(readBuffer[static_cast<std::size_t>(i)]);
+            }
         }
 
-        // Se o último bloco for menor, preenchemos com zeros
-        if (framesRead < BLOCK_SIZE) {
-            std::fill(block.begin() + framesRead, block.end(), 0);
+        // Zero-pad do bloco caso não esteja completo
+        for (std::size_t i = static_cast<std::size_t>(framesRead); i < BLOCK_SIZE; ++i) {
+            monoBlock[i] = 0.0;
         }
 
         // Aplicar DCT no bloco
-        applyDCT(block);
+        applyDCT(monoBlock, dctCoefficients);
 
         // Quantizar os coeficientes
-        auto quantizedBlock = quantizeDCTCoefficients(block);
+        const auto quantizedBlock = quantizeDCTCoefficients(dctCoefficients);
 
-        // Escrever o tamanho do bloco (16 bits)
+        // Determinar o número de bits necessários para representar o valor absoluto máximo
+        uint32_t maxMagnitude = 0;
+        for (const auto coef : quantizedBlock) {
+            maxMagnitude = std::max(maxMagnitude, magnitudeFromCoefficient(coef));
+        }
+        const uint8_t magnitudeBits =
+            (maxMagnitude == 0) ? 0 : static_cast<uint8_t>(std::bit_width(maxMagnitude));
+
+        // Escrever o tamanho do bloco (16 bits) e os bits dedicados à magnitude (6 bits)
         bs.write_n_bits(static_cast<uint64_t>(framesRead), 16);
+        bs.write_n_bits(static_cast<uint64_t>(magnitudeBits), 6);
 
-        // Escrever os coeficientes quantizados
-        for (const auto &coef : quantizedBlock) {
-            // Escrever cada coeficiente como 16 bits
-            bs.write_n_bits(static_cast<uint64_t>(static_cast<uint16_t>(coef)), 16);
+        // Escrever os coeficientes quantizados (bit de sinal + magnitude)
+        for (const auto coef : quantizedBlock) {
+            const bool isNegative = coef < 0;
+            bs.write_bit(isNegative ? 1 : 0);
+
+            if (magnitudeBits > 0) {
+                const uint32_t magnitude =
+                    isNegative ? static_cast<uint32_t>(-static_cast<long long>(coef))
+                               : static_cast<uint32_t>(coef);
+                bs.write_n_bits(static_cast<uint64_t>(magnitude), magnitudeBits);
+            }
         }
 
         blockCount++;
-        std::cout << "Processado bloco " << blockCount << " com " << framesRead << " frames\n";
+        if (blockCount <= 5 || blockCount % 200 == 0) {
+            std::cout << "Processado bloco " << blockCount << " com " << framesRead << " frames\n";
+        }
     }
 
     bs.close();
@@ -140,7 +176,11 @@ void decodeWav(const std::string &inputFile, const std::string &outputWav) {
     if (!fs) {
         throw std::runtime_error("Erro ao abrir arquivo de entrada: " + inputFile);
     }
-    BitStream bs(fs, false);  // false para modo de leitura
+    fs.seekg(0); // Ir para o início do arquivo para leitura
+    BitStream bs(fs, true);  // true para modo de leitura
+
+    std::cout << "\nIniciando decodificação...\n";
+    std::cout << "Lendo cabeçalho do arquivo...\n";
 
     // Ler cabeçalho
     // 1. Sample rate (32 bits)
@@ -149,6 +189,11 @@ void decodeWav(const std::string &inputFile, const std::string &outputWav) {
     sf_count_t totalFrames = static_cast<sf_count_t>(bs.read_n_bits(32));
     // 3. Tamanho do bloco (16 bits)
     int blockSize = static_cast<int>(bs.read_n_bits(16));
+
+    std::cout << "Informações do arquivo:\n";
+    std::cout << "Sample rate: " << sampleRate << " Hz\n";
+    std::cout << "Total frames: " << totalFrames << "\n";
+    std::cout << "Tamanho do bloco: " << blockSize << "\n";
 
     if (blockSize != BLOCK_SIZE) {
         throw std::runtime_error("Tamanho do bloco incompatível");
@@ -160,37 +205,64 @@ void decodeWav(const std::string &inputFile, const std::string &outputWav) {
         throw std::runtime_error("Erro ao criar arquivo WAV: " + outputWav);
     }
 
-    // Buffers para processamento
-    std::vector<short> block(BLOCK_SIZE);
-    std::vector<short> quantizedBlock(BLOCK_SIZE);
+    std::vector<int32_t> quantizedBlock(BLOCK_SIZE);
+    std::vector<double> spectralBlock(BLOCK_SIZE);
+    std::vector<double> timeDomainBlock(BLOCK_SIZE);
+    std::vector<short> pcmBlock(BLOCK_SIZE);
+
     int blockCount = 0;
+    sf_count_t totalFramesProcessed = 0;
 
     try {
-        while (true) {
-            // Ler tamanho do bloco (16 bits)
-            int framesInBlock = static_cast<int>(bs.read_n_bits(16));
-            if (framesInBlock <= 0 || framesInBlock > BLOCK_SIZE) break;
-
-            // Ler coeficientes quantizados
-            for (int i = 0; i < BLOCK_SIZE; i++) {
-                quantizedBlock[i] = static_cast<short>(bs.read_n_bits(16));
+        std::cout << "\nIniciando leitura dos blocos...\n";
+        while (totalFramesProcessed < totalFrames) {
+            const int framesInBlock = static_cast<int>(bs.read_n_bits(16));
+            if (framesInBlock <= 0 || framesInBlock > static_cast<int>(BLOCK_SIZE)) {
+                throw std::runtime_error("Tamanho de bloco inválido ou corrompido no fluxo codificado");
             }
 
-            // Dequantizar os coeficientes
-            block = dequantizeDCTCoefficients(quantizedBlock);
+            const uint8_t magnitudeBits = static_cast<uint8_t>(bs.read_n_bits(6));
+            if (magnitudeBits > 32) {
+                throw std::runtime_error("Número de bits da magnitude inválido no fluxo codificado");
+            }
 
-            // Aplicar IDCT
-            applyIDCT(block);
+            for (std::size_t i = 0; i < BLOCK_SIZE; ++i) {
+                const uint64_t signBit = bs.read_n_bits(1);
+                int32_t value = 0;
 
-            // Escrever no arquivo WAV
-            sf.writef(block.data(), framesInBlock);
+                if (magnitudeBits > 0) {
+                    const uint64_t magnitude = bs.read_n_bits(magnitudeBits);
+                    if (magnitude > static_cast<uint64_t>(std::numeric_limits<int32_t>::max())) {
+                        throw std::runtime_error("Magnitude de coeficiente excede o intervalo suportado");
+                    }
 
+                    value = signBit ? -static_cast<int32_t>(magnitude)
+                                    : static_cast<int32_t>(magnitude);
+                }
+
+                quantizedBlock[i] = value;
+            }
+
+            spectralBlock = dequantizeDCTCoefficients(quantizedBlock);
+            applyIDCT(spectralBlock, timeDomainBlock);
+
+            for (std::size_t i = 0; i < BLOCK_SIZE; ++i) {
+                pcmBlock[i] = clampToInt16(timeDomainBlock[i]);
+            }
+
+            sf.writef(pcmBlock.data(), framesInBlock);
+            totalFramesProcessed += framesInBlock;
             blockCount++;
-            std::cout << "Decodificado bloco " << blockCount << " com " << framesInBlock << " frames\n";
         }
-    } catch (...) {
-        // Fim do arquivo ou erro de leitura
+    } catch (const std::exception& e) {
+        std::cout << "Erro durante a leitura: " << e.what() << "\n";
+        throw;
     }
+
+    std::cout << "\nResumo da decodificação:\n";
+    std::cout << "Total de blocos processados: " << blockCount << "\n";
+    std::cout << "Total de frames processados: " << totalFramesProcessed << "\n";
+    std::cout << "Frames esperados: " << totalFrames << "\n";
 
     bs.close();
     std::cout << "Total de blocos decodificados: " << blockCount << "\n";
