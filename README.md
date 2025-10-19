@@ -4,7 +4,7 @@
 
 **Parte I (4)- Tomás Cerca Rodrigues**
 
-**Parte II (1)-**
+**Parte II (1)- Daniel Calonico**
 
 **Parte III (1)- Hugo Sousa**
 
