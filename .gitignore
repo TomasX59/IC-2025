@@ -19,3 +19,7 @@ bin/
 *.a
 *.so
 *.exe
+
+# Ignorar pasta do vscode
+.vscode
+.DS_Store

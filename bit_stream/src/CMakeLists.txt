@@ -17,4 +17,6 @@ target_sources(Common PRIVATE bit_stream.cpp byte_stream.cpp)
 
 add_executable (text2bin text2bin.cpp $<TARGET_OBJECTS:Common>)
 add_executable (bin2text bin2text.cpp $<TARGET_OBJECTS:Common>)
+add_executable (wav2bin wav_quant_enc.cpp $<TARGET_OBJECTS:Common>)
+add_executable (bin2wav wav_quant_dec.cpp $<TARGET_OBJECTS:Common>)
 
