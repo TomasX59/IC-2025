@@ -2,7 +2,6 @@
 #include <fstream>
 #include <vector>
 #include <sndfile.hh>
-#include <sndfile.h>
 #include <cmath>
 
 #include "bit_stream.h"
@@ -15,7 +14,7 @@ constexpr size_t FRAMES_BUFFER_SIZE = 65536; // buffer frames
 int main(int argc, char* argv[]) {
     // argument handling
     if(argc < 4) {
-        cerr << "Usage: wav_enc <input.wav> <encoded_file> <bits>\n";
+        cerr << "Usage: wav2bin <input.wav> <encoded_file> <bits>\n";
         return 1;
     }
 
@@ -36,7 +35,7 @@ int main(int argc, char* argv[]) {
     }
     
     // file output handler
-    fstream ofs { argv[argc-1], ios::out | ios::binary };
+    fstream ofs { outFile };
     if(not ofs.is_open()) {
         cerr << "Error opening bin file " << argv[argc-1] << endl;
         return 1;
@@ -45,8 +44,8 @@ int main(int argc, char* argv[]) {
     BitStream obs { ofs, STREAM_WRITE };
 
     // Quantization parameters
-    int nLevels = 1 << bits; // number of levels
-    int step = FRAMES_BUFFER_SIZE / nLevels; // step size
+    int nLevels = 1 << bits; // number of levels for resolution
+    int step = 65536 / nLevels; // resolution step size
     
     vector<short> samples(FRAMES_BUFFER_SIZE * sfhIn.channels());
 
@@ -59,11 +58,12 @@ int main(int argc, char* argv[]) {
             s -= 32768;                         // shift back
             if(s > 32767) s = 32767;            // clamp
             if(s < -32768) s = -32768;
-            samples[i] = static_cast<short>(s);
-			obs.write_n_bits(static_cast<short>(s), bits);
+            obs.write_n_bits(static_cast<short>(s), bits);
         }
     }
 
-    cout << "Quantization complete: " << bits << " bits used.\n";
+    // write format channels and samplerate
+
+    cout << "Quantization complete: " << bits << " bits of resolution used.\n";
     return 0;
 }
