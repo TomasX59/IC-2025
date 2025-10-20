@@ -1,5 +1,7 @@
 # IC-2025
-## Guiões de IC - distribuição do trabalho 
+
+## Guiões de IC - Distribuição do Trabalho
+
 ### Guião 1
 
 **Parte I (4) - Tomás Cerca Rodrigues**
