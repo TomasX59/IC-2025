@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
     // file output handler
     fstream ofs { outFile };
     if(not ofs.is_open()) {
-        cerr << "Error opening bin file " << argv[argc-1] << endl;
+        cerr << "Error opening bin file " << outFile << endl;
         return 1;
     }
     
