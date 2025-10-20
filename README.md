@@ -2,13 +2,25 @@
 ## Guiões de IC - distribuição do trabalho 
 ### Guião 1
 
-**Parte I (4)- Tomás Cerca Rodrigues**
+**Parte I (4) - Tomás Cerca Rodrigues**
 
-**Parte II (1)- Daniel Calonico**
+**Parte II (2) - Daniel Calonico**
 
-**Parte III (1)- Hugo Sousa**
+**Parte III (1) - Hugo Sousa**
 
-**Parte IV (1)-**
+**Parte IV (1) - Todos**
+
+### Guião 2
+
+**Parte I (2) - Daniel Calonico**
+
+**Parte II (1) -**
+
+**Parte III (1) -**
+
+**Parte IV (1) -**
+
+**Parte V (1) - Todos**
 
 ## Como usar:
 
