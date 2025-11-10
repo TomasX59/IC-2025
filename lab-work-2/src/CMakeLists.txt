@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 project(imageProc_test)
+project(colorChannel)
 
 SET (CMAKE_BUILD_TYPE "Release")
 #SET (CMAKE_BUILD_TYPE "Debug")
@@ -14,6 +15,9 @@ SET (BASE_DIR ${CMAKE_SOURCE_DIR} )
 SET (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${BASE_DIR}/../bin)
 
 add_executable (imageProc imageProcessor.cpp)
+add_executable (colorChannel imageColorChannel.cpp)
+
 target_link_libraries (imageProc ${OpenCV_LIBS})
+target_link_libraries (colorChannel ${OpenCV_LIBS})
 
 #target_compile_features(imageProc cxx_std_17)
