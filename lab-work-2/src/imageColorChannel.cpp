@@ -17,7 +17,7 @@ int main(const int argc, char *argv[])
 {
     if (argc < 2)
     {
-        cerr << "Usage: colorChannel file_name channel_number{ 0 | 1 | 2 }\n";
+        cerr << "Usage: colorChannel file_path channel_number{ 0 | 1 | 2 }\n";
         cerr << "    channel_number (0 = R, 1 = G, 2 = B)\n";
         return 1;
     }
