@@ -44,32 +44,41 @@ int save_picture(const Mat & img, const string& file_path, const ostringstream& 
 }
 
 /// -n create negative image
-/// opencv easy way -> cv::LUT()
+/// opencv easy way -> cv::bitwise_not()
 void negative(Mat& img, ostringstream& new_path)
 {
     if (img.depth() != CV_8U) {
-        cerr << "Warning: negative() only supports 8-bit images. Will convert with wacky results...\n";
-        img.convertTo(img, CV_8U);
+        // Update: this is to handle images with more than 8bits of depth.
+        // I've already implemented the hard way, now I'll go the easy way.
+        bitwise_not(img, img);
+        new_path << "_negtv";
+        return;
     }
 
     const int cols = img.cols;
     const int rows = img.rows;
     const int chnl = img.channels();
+    const int pchn = chnl == 4 ? 3 : chnl;
 
     // looking into documentation, I found an example that the best
     // performance can be taken by checking if we can iterate by an
     // image as if it was a single row:
     if (img.isContinuous()) {
         uchar* data = img.data;
-        const int element_count = rows * cols * chnl;
-        for (int i = 0; i < element_count; i++) {
-            data[i] = 255 - data[i];
+        for (int i = 0; i < rows * cols; i++) {
+            for (int j = 0; j < pchn; j++) {
+                const int curr = i * chnl + j;
+                data[curr] = 255 - data[curr];
+            }
         }
     } else {
         for (int i = 0; i < rows; i++) {
             uchar* row = img.ptr<uchar>(i);
-            for (int j = 0; j < cols * chnl; j++) {
-                row[j] = 255 - row[j];
+            for (int j = 0; j < cols; j++) {
+                for (int k = 0; k < pchn; k++) {
+                    const int curr = j * chnl + k;
+                    row[curr] = 255 - row[curr];
+                }
             }
         }
     }
