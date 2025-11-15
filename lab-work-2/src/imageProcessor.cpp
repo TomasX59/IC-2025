@@ -1,16 +1,20 @@
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
-#include <iostream>
 #include <unistd.h>
+
+#include <iostream>
 #include <filesystem>
 
 using namespace cv;
 using namespace std;
 
-/// save changes to new file
+/// overengineered way to save changes to a new file
 int save_picture(const Mat & img, const string& file_path, const ostringstream& new_path)
 {
-    if (new_path.str().length() == 0) return 1;
+    if (new_path.str().length() == 0) {
+        cout << "No changes made to picture." << endl;
+        return 1;
+    }
     const string output = "out/";
 
     try {
@@ -47,9 +51,9 @@ int save_picture(const Mat & img, const string& file_path, const ostringstream& 
 /// opencv easy way -> cv::bitwise_not()
 void negative(Mat& img, ostringstream& new_path)
 {
+    // Update: this is to handle images with more than 8bits of depth.
+    // I've already implemented the hard way, now I'll go the easy way.
     if (img.depth() != CV_8U) {
-        // Update: this is to handle images with more than 8bits of depth.
-        // I've already implemented the hard way, now I'll go the easy way.
         bitwise_not(img, img);
         new_path << "_negtv";
         return;
@@ -90,6 +94,15 @@ void negative(Mat& img, ostringstream& new_path)
 /// opencv easy way -> flip()
 void flip_vertical(Mat& img, ostringstream& new_path)
 {
+    // update: adding support to images with depth larger than 8bit.
+    // original code is down below.
+    if (img.depth() != CV_8U) {
+        flip(img, img, 0);
+        new_path << "_flipy";
+        return;
+    }
+
+    // o.g. code for 8-bit images
     const int rows = img.rows;
     const int row_size = img.cols * img.channels();
 
@@ -103,9 +116,18 @@ void flip_vertical(Mat& img, ostringstream& new_path)
 }
 
 /// -x mirror image horizontally;
-/// opencv easy way
+/// opencv easy way -> flip()
 void flip_horizontal(Mat& img, ostringstream& new_path)
 {
+    // update: adding support to images with depth larger than 8bit.
+    // original code is down below.
+    if (img.depth() != CV_8U) {
+        flip(img, img, 1);
+        new_path << "_flipx";
+        return;
+    }
+
+    // o.g. code for 8-bit images
     const int cols = img.cols;
     const int rows = img.rows;
     const int chnl = img.channels();
@@ -122,19 +144,46 @@ void flip_horizontal(Mat& img, ostringstream& new_path)
     new_path << "_flipx";
 }
 
-// -l <degrees> rotate image by multiples of 90º;
-// opencv easy way -> rotate(); transpose(); and flip();
+/// -l <degrees> rotate image by multiples of 90º;
+/// opencv easy way -> rotate();
 void rotate(Mat& img, int rotation, ostringstream& new_path)
 {
     rotation = (rotation % 360 + 360) % 360;
-
     if (rotation == 0) return;
 
+    // update: added this to handle images with depth higher than 8bit.
+    // this time using cv::rotate() because I'm lazy.
+    if (img.depth() != CV_8U) {
+        int rotateCode = 0;
+        bool needs_rotation = true;
+
+        switch(rotation) {
+            case 90:  rotateCode = ROTATE_90_COUNTERCLOCKWISE; break;
+            case 180: rotateCode = ROTATE_180; break;
+            case 270: rotateCode = ROTATE_90_CLOCKWISE; break;
+            default:  needs_rotation = false; break;
+        }
+
+        if (needs_rotation) {
+            cv::rotate(img, img, rotateCode);
+            new_path << "_r" << rotation;
+        }
+        return;
+    }
+
+    // update: og functions down below
+    // this one is the hardest and most cumbersome of my implementations,
+    // since there are many cases and advantages to be taken of. I could've
+    // just applied the 90 degrees rotation up to 3 times to achieve the others,
+    // but the 90 degrees and 270 degrees need to create a new Mat, while
+    // the 180 degrees rotation can actually swap pixel in the same Mat.
+    // Also, the 180 can take advantage of Mat::isContinous(), for O(n)
+    // while 90/270 cannot (or would be very hard to implement).
     const int cols = img.cols;
     const int rows = img.rows;
     const int chnl = img.channels();
 
-    // counterclockwise 90 degrees rotation
+    // counterclockwise 90 / clockwise 270 degrees rotation
     if (rotation == 90) {
         Mat rot_img = Mat(cols, rows, img.type());
 
@@ -191,7 +240,7 @@ void rotate(Mat& img, int rotation, ostringstream& new_path)
         return;
     }
 
-    // clockwise 90 degrees rotation
+    // clockwise 90 / counterclockwise 270 degrees rotation
     if (rotation == 270) {
         Mat rot_img = Mat(cols, rows, img.type());
 
@@ -209,8 +258,8 @@ void rotate(Mat& img, int rotation, ostringstream& new_path)
     }
 }
 
-// -b <intensity> increase contrast and brightness;
-// opencv easy way -> convertTo()
+/// -b <intensity> increase contrast and brightness;
+/// opencv easy way -> convertTo()
 void increase_contrbright(Mat& img, const double& gain, const int& bias, ostringstream& new_path)
 {
     // this algo would be just 3 nested iterators, to apply some changes
@@ -218,7 +267,7 @@ void increase_contrbright(Mat& img, const double& gain, const int& bias, ostring
     // in the negative() function. So for this one I took the liberty of
     // using Mat::forEach(), that actually can take a lambda and also
     // parallelizes execution under the hood.
-    // update: I'm changing this to support other channels than bgr
+    // update: I'm changing this to support more channels than bgr
     img.forEach<uchar>([&gain, &bias](uchar& pixel, const int[]) {
        pixel = saturate_cast<uchar>(pixel * gain + bias);
     });
@@ -226,14 +275,17 @@ void increase_contrbright(Mat& img, const double& gain, const int& bias, ostring
     new_path << "_icb";
 }
 
-// -d <intensity> decreases contrast and brightness;
+/// -d <intensity> decreases contrast and brightness;
+/// opencv easy way -> convertTo()
 void decrease_contrbright(Mat& img, const double& gain, const int& bias, ostringstream& new_path)
 {
-    // c'mon, I'm using the easy way now.
+    // c'mon, I ran out of hard ways to implement, I'm using the easy way now.
     img.convertTo(img, -1, 1.0/gain, -bias);
     new_path << "_dcb";
 }
 
+/// never thought I would live to see the day I would write
+/// something like this, as a programmer.
 void print_usage()
 {
     cerr << "Usage: imageProcessor [OPTION] FILE\n\n";
@@ -333,7 +385,7 @@ int main(const int argc, char *const *argv) {
     TickMeter tm_total;
     tm_total.start();
 
-    // image processors
+    // actual image processors
     if (ngtv) {
         TickMeter tm;
         tm.start();
