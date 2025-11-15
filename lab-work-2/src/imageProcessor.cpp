@@ -1,12 +1,14 @@
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <iostream>
+#include <unistd.h>
 
 using namespace cv;
 using namespace std;
 
 /// save changes to new file
-int save_picture(Mat& img, const string& file_path, const ostringstream& new_path) {
+int save_picture(const Mat & img, const string& file_path, const ostringstream& new_path)
+{
     try {
         const string extension = file_path.substr(file_path.find_last_of('.') + 1);
         const string final_path = file_path.substr(0, file_path.find_last_of('.'))
@@ -23,7 +25,8 @@ int save_picture(Mat& img, const string& file_path, const ostringstream& new_pat
 
 /// -n create negative image
 /// opencv easy way -> cv::LUT()
-void negative(Mat& img, ostringstream& new_path) {
+void negative(Mat& img, ostringstream& new_path)
+{
     const int cols = img.cols;
     const int rows = img.rows;
     const int chnl = img.channels();
@@ -51,7 +54,8 @@ void negative(Mat& img, ostringstream& new_path) {
 
 /// -y mirror image vertically
 /// opencv easy way
-void flip_vertical(Mat& img, ostringstream& new_path) {
+void flip_vertical(Mat& img, ostringstream& new_path)
+{
     // 1. take n number of rows of image
     // 2. for each top and bottom row, swap their column pixels
     const int cols = img.cols;
@@ -74,7 +78,8 @@ void flip_vertical(Mat& img, ostringstream& new_path) {
 
 /// -x mirror image horizontally
 /// opencv easy way
-void flip_horizontal(Mat& img, ostringstream& new_path) {
+void flip_horizontal(Mat& img, ostringstream& new_path)
+{
     // 1. take n number of rows of image
     // 2. for each row, swap the first and last column
     const int cols = img.cols;
@@ -98,7 +103,8 @@ void flip_horizontal(Mat& img, ostringstream& new_path) {
 
 // -l <degrees> rotate image by multiples of 90º
 // opencv easy way -> rotate(); transpose(); and flip();
-void rotate(Mat& img, const int rotation, ostringstream& new_path) {
+void rotate(Mat& img, const int rotation, ostringstream& new_path)
+{
     if (rotation % 360 == 0) {
         new_path << "_rotate360";
         return;
@@ -178,9 +184,9 @@ void rotate(Mat& img, const int rotation, ostringstream& new_path) {
     }
 }
 
-// -b <intensity> increase gamma
+// -b <intensity> increase contrast and brightness
 // opencv easy way -> convertTo()
-void increase_gamma(Mat& img, const double& gain, const int& bias, ostringstream& new_path)
+void increase_contrbright(Mat& img, const double& gain, const int& bias, ostringstream& new_path)
 {
     // this algo would be just 3 nested iterators, to apply some changes
     // to each channel of each column of each row, which is already done
@@ -193,12 +199,12 @@ void increase_gamma(Mat& img, const double& gain, const int& bias, ostringstream
         pixel[2] = saturate_cast<uchar>(pixel[2] * gain + bias); //r
     });
 
-    new_path << "_increased_gamma";
+    new_path << "_increased_contrbright";
 }
 
-// -d <intensity> decreases gamma
+// -d <intensity> decreases contrast and brightness
 // opencv easy way -> convertTo()
-void decrease_gamma(Mat& img, const double& gain, const int& bias, ostringstream& new_path)
+void decrease_contrbright(Mat& img, const double& gain, const int& bias, ostringstream& new_path)
 {
     img.forEach<Vec3b>([&gain, &bias](Vec3b &pixel, const int[]) -> void {
         pixel[0] = saturate_cast<uchar>(pixel[0] / gain - bias); //b
@@ -206,7 +212,22 @@ void decrease_gamma(Mat& img, const double& gain, const int& bias, ostringstream
         pixel[2] = saturate_cast<uchar>(pixel[2] / gain - bias); //r
     });
 
-    new_path << "_decreased_gamma";
+    new_path << "_decreased_constrbright";
+}
+
+void print_usage()
+{
+    cerr << "Usage: imageProcessor [OPTION] FILE\n\n";
+    cerr << "Process images with various transformations.\n";
+    cerr << "\nFlags:\n";
+    cerr << "  -n                       create negative image\n";
+    cerr << "  -y                       mirror image vertically\n";
+    cerr << "  -x                       mirror image horizontally\n";
+    cerr << "  -h, --help               display this help and exit\n";
+    cerr << "\nOptions:\n";
+    cerr << "  -l DEGREES               rotate image by multiples of 90°\n";
+    cerr << "  -b [1.0-3.0] [0-100]     increase contrast and brightness\n";
+    cerr << "  -d [1.0-3.0] [0-100]     decrease contrast and brightness\n";
 }
 
 /// Without using possible existing functions on OpenCV, but
@@ -214,56 +235,63 @@ void decrease_gamma(Mat& img, const double& gain, const int& bias, ostringstream
 /// without possibly jeorpadizing the learning of image matrix manipulation,
 /// without some do-it-all functions of OpenCV, implement the operations!!
 /// (Open Comando Vermelho Rogério Lemgruber)
-int main(const int argc, const char *argv[])
-{
-    if (argc < 2)
-    {
-        cerr << "Usage: imageProcessor [OPTION] FILE\n\n";
-        cerr << "Process images with various transformations.\n\n";
-        cerr << "Options:\n";
-        cerr << "  -n                       create negative image\n";
-        cerr << "  -y                       mirror image vertically\n";
-        cerr << "  -x                       mirror image horizontally\n";
-        cerr << "  -l DEGREES               rotate image by multiples of 90°\n";
-        cerr << "  -b [1.0-3.0] [0-100]     increase contrast and brightness\n";
-        cerr << "  -d [1.0-3.0] [0-100]     decrease contrast and brightness\n";
-        cerr << "  -h, --help               display this help and exit\n";
+int main(const int argc, char *const *argv) {
+    // todo: processing time
+    string file_path;
+    int rotation = 0;
+    double b_gain = 1.0, d_gain = 1.0;
+    int b_bias = 0, d_bias = 0;
+    bool ngtv = false, flip_y = false, flip_x = false;
+
+    int opt;
+    while ((opt = getopt(argc, argv, "nyxl:b:d:h")) != -1) {
+        switch (opt) {
+        case 'n': ngtv = true; break;
+        case 'y': flip_y = true; break;
+        case 'x': flip_x = true; break;
+        case 'l':
+            rotation = stoi(optarg);
+            break;
+        case 'b':
+            b_gain = stod(optarg);
+            b_bias = stoi(argv[optind++]);
+            break;
+        case 'd':
+            d_gain = stod(optarg);
+            d_bias = stoi(argv[optind++]);
+            break;
+        case 'h':
+            print_usage();
+            return 0;
+        default:
+            print_usage();
+            return 1;
+        }
+    }
+
+    if (optind < argc) {
+        file_path = argv[optind];
+    } else {
+        cerr << "Error: No file specified\n";
         return 1;
     }
 
-    // const char* OPTIONS = argv[1];
-    const string file_path = argv[2];
-    ostringstream new_path;
     Mat img = imread(file_path, IMREAD_COLOR);
-
     if (img.empty())
     {
-        cout << "Could not read the image: " << file_path << endl;
+        cerr << "Could not read the image: " << file_path << endl;
         return 1;
     }
 
-    // -n create negative image
-    // negative(img, file_path);
+    ostringstream new_path;
 
-    // -y mirror image vertically
-    // flip_vertical(img, new_path);
-
-    // -x mirror image horizontally
-    // flip_horizontal(img, new_path);
-
-    // -l <degrees> rotate image by multiples of 90º
-    // const int rotation = stoi(argv[3]);
-    // rotate(img, rotation, new_path);
-
-    // -b <intensity> increase gamma
-    // const double gain = stod(argv[3]);
-    // const int bias = stoi(argv[4]);
-    // increase_gamma(img, gain, bias, new_path);
-
-    // -d <intensity> decreases gamma
-    const double gain = stod(argv[3]);
-    const int bias = stoi(argv[4]);
-    decrease_gamma(img, gain, bias, new_path);
+    // image processors
+    if (ngtv) negative(img, new_path);
+    if (flip_y) flip_vertical(img, new_path);
+    if (flip_x) flip_horizontal(img, new_path);
+    if (rotation != 0) rotate(img, rotation, new_path);
+    if (b_gain != 1.0 || b_bias != 0) increase_contrbright(img, b_gain, b_bias, new_path);
+    if (d_gain != 1.0 || d_bias != 0) decrease_contrbright(img, d_gain , d_bias, new_path);
 
     return save_picture(img, file_path, new_path);
 }
