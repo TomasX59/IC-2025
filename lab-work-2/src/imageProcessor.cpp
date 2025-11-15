@@ -1,6 +1,5 @@
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
-
 #include <iostream>
 
 using namespace cv;
@@ -97,6 +96,90 @@ void flip_horizontal(Mat& img, ostringstream& new_path) {
     new_path << "_fliphoriz";
 }
 
+// -l <degrees> rotate image by multiples of 90º
+// opencv easy way -> rotate(); transpose(); and flip();
+void rotate(Mat& img, const int rotation, ostringstream& new_path) {
+    if (rotation % 360 == 0) {
+        new_path << "_rotate360";
+        return;
+    }
+
+    // counterclockwise 90 degrees rotation
+    if (rotation / 90 == 1) {
+        Mat rot = Mat(img.cols, img.rows, img.type());
+
+        for (int i = 0; i < img.rows; i++) {
+            const Vec3b* src_row = img.ptr<Vec3b>(i);
+            for (int j = 0; j < img.cols; j++) {
+                rot.at<Vec3b>(img.cols - j - 1, i) = src_row[j];
+            }
+        }
+        img = rot.clone();
+        rot.deallocate();
+        new_path << "_rotate90";
+        return;
+    }
+
+    // 180 degrees rotation
+    if (rotation / 90 == 2) {
+        const int cols = img.cols;
+        const int rows = img.rows;
+
+        // curiously, if img memory is continuous, this algo is the same
+        // for horizontal flip. But without restraining the rows, it is
+        // actually both horizontal AND vertical flips
+        if (img.isContinuous()) {
+            uchar* data = img.data;
+            const int chnl = img.channels();
+            const int elements = rows * cols;
+
+            for (int i = 0; i < elements / 2; i++) {
+                for (int j = 0; j < chnl; j++) {
+                    const int curr = i * chnl + j;
+                    const int swap = (elements - i - 1) * chnl + j;
+
+                    const uchar buff = data[curr];
+                    data[curr] = data[swap];
+                    data[swap] = buff;
+                }
+            }
+        } else {
+            for (int i = 0; i < rows / 2; i++) {
+                for (int j = 0; j < cols; j++) {
+                    const Vec3b buff = img.at<Vec3b>(i, j);
+                    img.at<Vec3b>(i, j) = img.at<Vec3b>(cols - i - 1, rows - j - 1);
+                    img.at<Vec3b>(cols - i - 1, rows - j - 1) = buff;
+                }
+            }
+            if (rows % 2 == 1) {
+                const int mid_row = rows / 2;
+                for (int j = 0; j < cols / 2; j++) {
+                    const Vec3b buff = img.at<Vec3b>(mid_row, j);
+                    img.at<Vec3b>(mid_row, j) = img.at<Vec3b>(mid_row, rows - j - 1);
+                    img.at<Vec3b>(mid_row, rows - j - 1) = buff;
+                }
+            }
+        }
+        new_path << "_rotate180";
+        return;
+    }
+
+    // clockwise 90 degrees rotation
+    if (rotation / 90 == 3) {
+        Mat rot = Mat(img.cols, img.rows, img.type());
+
+        for (int i = 0; i < img.rows; i++) {
+            const Vec3b* src_row = img.ptr<Vec3b>(i);
+            for (int j = 0; j < img.cols; j++) {
+                rot.at<Vec3b>(j, img.rows - i - 1) = src_row[j];
+            }
+        }
+        img = rot.clone();
+        new_path << "_rotate270";
+        return;
+    }
+}
+
 /// Without using possible existing functions on OpenCV, but
 /// without possibly specifying what are the limits of usage of OpenCV,
 /// without possibly jeorpadizing the entire purpose of learning codification,
@@ -140,7 +223,12 @@ int main(const int argc, const char *argv[])
     // flip_horizontal(img, new_path);
 
     // -l <degrees> rotate image by multiples of 90º
+    // 2 approaches: rotate 90 x 3 times or find if rotation is 90, 180, 270 or 360
+    // 1. multiply matrix by its corresponding rotation
     // opencv easy way
+    const int rotation = stoi(argv[3]);
+
+    rotate(img, rotation, new_path);
 
     // -b <intensity> increase brightness
     // 1. take g and b, gain and bias from user input
