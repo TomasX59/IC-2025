@@ -52,48 +52,35 @@ void negative(Mat& img, ostringstream& new_path)
     new_path << "_negative";
 }
 
-/// -y mirror image vertically
-/// opencv easy way
+/// -y mirror image vertically;
+/// opencv easy way -> flip()
 void flip_vertical(Mat& img, ostringstream& new_path)
 {
-    // 1. take n number of rows of image
-    // 2. for each top and bottom row, swap their column pixels
-    const int cols = img.cols;
     const int rows = img.rows;
-    const int chnl = img.channels();
+    const int row_size = img.cols * img.channels();
 
-    for (int i = 0; i < rows / 2; i ++) {
+    for (int i = 0; i < rows / 2; i++) {
         uchar* top_row = img.ptr<uchar>(i);
         uchar* bot_row = img.ptr<uchar>(rows - 1 - i);
-
-        for (int j = 0; j < cols * chnl; j++) {
-            const uchar buff = top_row[j];
-            top_row[j] = bot_row[j];
-            bot_row[j] = buff;
-        }
+        std::swap_ranges(top_row, top_row + row_size, bot_row);
     }
 
     new_path << "_flipvert";
 }
 
-/// -x mirror image horizontally
+/// -x mirror image horizontally;
 /// opencv easy way
 void flip_horizontal(Mat& img, ostringstream& new_path)
 {
-    // 1. take n number of rows of image
-    // 2. for each row, swap the first and last column
     const int cols = img.cols;
     const int rows = img.rows;
-    const int chnl = img.channels();
+    const int cnhl = img.channels();
 
     for (int i = 0; i < rows; i++) {
         uchar* row = img.ptr<uchar>(i);
-
         for (int j = 0; j < cols / 2; j++) {
-            for (int k = 0; k < chnl; k++) {
-                const uchar buff = row[j * chnl + k];
-                row[j * chnl + k] = row[(cols - 1 - j) * chnl + k];
-                row[(cols - 1 - j) * chnl + k] = buff;
+            for (int k = 0; k < cnhl; k++) {
+                swap(row[j * cnhl + k], row[(cols - j - 1) * cnhl + k]);
             }
         }
     }
@@ -101,7 +88,7 @@ void flip_horizontal(Mat& img, ostringstream& new_path)
     new_path << "_fliphoriz";
 }
 
-// -l <degrees> rotate image by multiples of 90º
+// -l <degrees> rotate image by multiples of 90º;
 // opencv easy way -> rotate(); transpose(); and flip();
 void rotate(Mat& img, const int rotation, ostringstream& new_path)
 {
@@ -117,7 +104,8 @@ void rotate(Mat& img, const int rotation, ostringstream& new_path)
         for (int i = 0; i < img.rows; i++) {
             const Vec3b* src_row = img.ptr<Vec3b>(i);
             for (int j = 0; j < img.cols; j++) {
-                rot_img.at<Vec3b>(img.cols - j - 1, i) = src_row[j];
+                Vec3b* dst_row = rot_img.ptr<Vec3b>(img.cols - j - 1);
+                dst_row[i] = src_row[j];
             }
         }
         img = rot_img;
@@ -134,34 +122,26 @@ void rotate(Mat& img, const int rotation, ostringstream& new_path)
         // for horizontal flip. But without restraining the rows, it is
         // actually both horizontal AND vertical flips
         if (img.isContinuous()) {
-            uchar* data = img.data;
-            const int chnl = img.channels();
+            Vec3b* data = img.ptr<Vec3b>(0);
             const int elements = rows * cols;
 
             for (int i = 0; i < elements / 2; i++) {
-                for (int j = 0; j < chnl; j++) {
-                    const int curr = i * chnl + j;
-                    const int swap = (elements - i - 1) * chnl + j;
-
-                    const uchar buff = data[curr];
-                    data[curr] = data[swap];
-                    data[swap] = buff;
-                }
+                swap(data[i], data[(elements - i - 1)]);
             }
         } else {
             for (int i = 0; i < rows / 2; i++) {
+                Vec3b* top_row = img.ptr<Vec3b>(i);
+                Vec3b* bot_row = img.ptr<Vec3b>(rows - i - 1);
+
                 for (int j = 0; j < cols; j++) {
-                    const Vec3b buff = img.at<Vec3b>(i, j);
-                    img.at<Vec3b>(i, j) = img.at<Vec3b>(cols - i - 1, rows - j - 1);
-                    img.at<Vec3b>(cols - i - 1, rows - j - 1) = buff;
+                    swap(top_row[j], bot_row[cols - j - 1]);
                 }
             }
             if (rows % 2 == 1) {
-                const int mid_row = rows / 2;
+                Vec3b* mid_row = img.ptr<Vec3b>(rows / 2);
+
                 for (int j = 0; j < cols / 2; j++) {
-                    const Vec3b buff = img.at<Vec3b>(mid_row, j);
-                    img.at<Vec3b>(mid_row, j) = img.at<Vec3b>(mid_row, rows - j - 1);
-                    img.at<Vec3b>(mid_row, rows - j - 1) = buff;
+                    swap(mid_row[j], mid_row[cols - 1 - j]);
                 }
             }
         }
@@ -176,7 +156,8 @@ void rotate(Mat& img, const int rotation, ostringstream& new_path)
         for (int i = 0; i < img.rows; i++) {
             const Vec3b* src_row = img.ptr<Vec3b>(i);
             for (int j = 0; j < img.cols; j++) {
-                rot_img.at<Vec3b>(j, img.rows - i - 1) = src_row[j];
+                Vec3b* dst_row = rot_img.ptr<Vec3b>(j);
+                dst_row[img.rows - i - 1] = src_row[j];
             }
         }
         img = rot_img;
@@ -184,7 +165,7 @@ void rotate(Mat& img, const int rotation, ostringstream& new_path)
     }
 }
 
-// -b <intensity> increase contrast and brightness
+// -b <intensity> increase contrast and brightness;
 // opencv easy way -> convertTo()
 void increase_contrbright(Mat& img, const double& gain, const int& bias, ostringstream& new_path)
 {
@@ -202,7 +183,7 @@ void increase_contrbright(Mat& img, const double& gain, const int& bias, ostring
     new_path << "_increased_contrbright";
 }
 
-// -d <intensity> decreases contrast and brightness
+// -d <intensity> decreases contrast and brightness;
 // opencv easy way -> convertTo()
 void decrease_contrbright(Mat& img, const double& gain, const int& bias, ostringstream& new_path)
 {
@@ -212,7 +193,7 @@ void decrease_contrbright(Mat& img, const double& gain, const int& bias, ostring
         pixel[2] = saturate_cast<uchar>(pixel[2] / gain - bias); //r
     });
 
-    new_path << "_decreased_constrbright";
+    new_path << "_decreased_contrbright";
 }
 
 void print_usage()
@@ -220,14 +201,14 @@ void print_usage()
     cerr << "Usage: imageProcessor [OPTION] FILE\n\n";
     cerr << "Process images with various transformations.\n";
     cerr << "\nFlags:\n";
-    cerr << "  -n                       create negative image\n";
-    cerr << "  -y                       mirror image vertically\n";
-    cerr << "  -x                       mirror image horizontally\n";
-    cerr << "  -h, --help               display this help and exit\n";
+    cerr << "  -n                     create negative image\n";
+    cerr << "  -y                     mirror image vertically\n";
+    cerr << "  -x                     mirror image horizontally\n";
+    cerr << "  -h, --help             display this help and exit\n";
     cerr << "\nOptions:\n";
-    cerr << "  -l DEGREES               rotate image by multiples of 90°\n";
-    cerr << "  -b [1.0-3.0] [0-100]     increase contrast and brightness\n";
-    cerr << "  -d [1.0-3.0] [0-100]     decrease contrast and brightness\n";
+    cerr << "  -l DEGREES             rotate counterclockwise by 90°\n";
+    cerr << "  -b [0-10.0] [0-100]    increase contrast and brightness\n";
+    cerr << "  -d [0-10.0] [0-100]    decrease contrast and brightness\n";
 }
 
 /// Without using possible existing functions on OpenCV, but
@@ -251,14 +232,26 @@ int main(const int argc, char *const *argv) {
         case 'x': flip_x = true; break;
         case 'l':
             rotation = stoi(optarg);
+            if (rotation % 90 != 0) {
+                cerr << "Error: rotation must be a multiple of 90\n";
+                return 1;
+            }
             break;
         case 'b':
             b_gain = stod(optarg);
             b_bias = stoi(argv[optind++]);
+            if (b_gain < 0 || b_bias < 0) {
+                cerr << "Error: Invalid gain/bias values\n";
+                return 1;
+            }
             break;
         case 'd':
             d_gain = stod(optarg);
             d_bias = stoi(argv[optind++]);
+            if (d_gain < 0 || d_bias < 0) {
+                cerr << "Error: Invalid gain/bias values\n";
+                return 1;
+            }
             break;
         case 'h':
             print_usage();
@@ -280,6 +273,7 @@ int main(const int argc, char *const *argv) {
     if (img.empty())
     {
         cerr << "Could not read the image: " << file_path << endl;
+        cerr << "Supported formats: JPG, PNG, BMP, TIFF\n";
         return 1;
     }
 
