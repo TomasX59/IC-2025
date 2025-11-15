@@ -106,16 +106,15 @@ void rotate(Mat& img, const int rotation, ostringstream& new_path) {
 
     // counterclockwise 90 degrees rotation
     if (rotation / 90 == 1) {
-        Mat rot = Mat(img.cols, img.rows, img.type());
+        Mat rot_img = Mat(img.cols, img.rows, img.type());
 
         for (int i = 0; i < img.rows; i++) {
             const Vec3b* src_row = img.ptr<Vec3b>(i);
             for (int j = 0; j < img.cols; j++) {
-                rot.at<Vec3b>(img.cols - j - 1, i) = src_row[j];
+                rot_img.at<Vec3b>(img.cols - j - 1, i) = src_row[j];
             }
         }
-        img = rot.clone();
-        rot.deallocate();
+        img = rot_img;
         new_path << "_rotate90";
         return;
     }
@@ -166,23 +165,53 @@ void rotate(Mat& img, const int rotation, ostringstream& new_path) {
 
     // clockwise 90 degrees rotation
     if (rotation / 90 == 3) {
-        Mat rot = Mat(img.cols, img.rows, img.type());
+        Mat rot_img = Mat(img.cols, img.rows, img.type());
 
         for (int i = 0; i < img.rows; i++) {
             const Vec3b* src_row = img.ptr<Vec3b>(i);
             for (int j = 0; j < img.cols; j++) {
-                rot.at<Vec3b>(j, img.rows - i - 1) = src_row[j];
+                rot_img.at<Vec3b>(j, img.rows - i - 1) = src_row[j];
             }
         }
-        img = rot.clone();
+        img = rot_img;
         new_path << "_rotate270";
-        return;
     }
+}
+
+// -b <intensity> increase gamma
+// opencv easy way -> convertTo()
+void increase_gamma(Mat& img, const double& gain, const int& bias, ostringstream& new_path)
+{
+    // this algo would be just 3 nested iterators, to apply some changes
+    // to each channel of each column of each row, which is already done
+    // in the negative() function. So for this one I took the liberty of
+    // using Mat::forEach(), that actually can take a lambda and also
+    // parallelizes execution under the hood.
+    img.forEach<Vec3b>([&gain, &bias](Vec3b &pixel, const int[]) -> void {
+        pixel[0] = saturate_cast<uchar>(pixel[0] * gain + bias); //b
+        pixel[1] = saturate_cast<uchar>(pixel[1] * gain + bias); //g
+        pixel[2] = saturate_cast<uchar>(pixel[2] * gain + bias); //r
+    });
+
+    new_path << "_increased_gamma";
+}
+
+// -d <intensity> decreases gamma
+// opencv easy way -> convertTo()
+void decrease_gamma(Mat& img, const double& gain, const int& bias, ostringstream& new_path)
+{
+    img.forEach<Vec3b>([&gain, &bias](Vec3b &pixel, const int[]) -> void {
+        pixel[0] = saturate_cast<uchar>(pixel[0] / gain - bias); //b
+        pixel[1] = saturate_cast<uchar>(pixel[1] / gain - bias); //g
+        pixel[2] = saturate_cast<uchar>(pixel[2] / gain - bias); //r
+    });
+
+    new_path << "_decreased_gamma";
 }
 
 /// Without using possible existing functions on OpenCV, but
 /// without possibly specifying what are the limits of usage of OpenCV,
-/// without possibly jeorpadizing the entire purpose of learning codification,
+/// without possibly jeorpadizing the learning of image matrix manipulation,
 /// without some do-it-all functions of OpenCV, implement the operations!!
 /// (Open Comando Vermelho Rogério Lemgruber)
 int main(const int argc, const char *argv[])
@@ -192,13 +221,13 @@ int main(const int argc, const char *argv[])
         cerr << "Usage: imageProcessor [OPTION] FILE\n\n";
         cerr << "Process images with various transformations.\n\n";
         cerr << "Options:\n";
-        cerr << "  -n                    create negative image\n";
-        cerr << "  -y                    mirror image vertically\n";
-        cerr << "  -x                    mirror image horizontally\n";
-        cerr << "  -l DEGREES            rotate image by multiples of 90°\n";
-        cerr << "  -b GAIN BIAS          increase gamma\n";
-        cerr << "  -d GAIN BIAS          decrease gamma\n";
-        cerr << "  -h, --help            display this help and exit\n";
+        cerr << "  -n                       create negative image\n";
+        cerr << "  -y                       mirror image vertically\n";
+        cerr << "  -x                       mirror image horizontally\n";
+        cerr << "  -l DEGREES               rotate image by multiples of 90°\n";
+        cerr << "  -b [1.0-3.0] [0-100]     increase contrast and brightness\n";
+        cerr << "  -d [1.0-3.0] [0-100]     decrease contrast and brightness\n";
+        cerr << "  -h, --help               display this help and exit\n";
         return 1;
     }
 
@@ -223,24 +252,18 @@ int main(const int argc, const char *argv[])
     // flip_horizontal(img, new_path);
 
     // -l <degrees> rotate image by multiples of 90º
-    // 2 approaches: rotate 90 x 3 times or find if rotation is 90, 180, 270 or 360
-    // 1. multiply matrix by its corresponding rotation
-    // opencv easy way
-    const int rotation = stoi(argv[3]);
+    // const int rotation = stoi(argv[3]);
+    // rotate(img, rotation, new_path);
 
-    rotate(img, rotation, new_path);
+    // -b <intensity> increase gamma
+    // const double gain = stod(argv[3]);
+    // const int bias = stoi(argv[4]);
+    // increase_gamma(img, gain, bias, new_path);
 
-    // -b <intensity> increase brightness
-    // 1. take g and b, gain and bias from user input
-    // 2. for each row, for each col, for each channel, multiply by g and add b
-    // 3. save new image
-    // opencv easy way -> convertTo() or LUT();
-
-    // -d <intensity> decreases brightness
-    // 1. take g and b, gain and bias from user input
-    // 2. for each row, for each col, for each channel, divide by g and subtract b
-    // 3. save new image
-    // opencv easy way -> convertTo() or LUT();
+    // -d <intensity> decreases gamma
+    const double gain = stod(argv[3]);
+    const int bias = stoi(argv[4]);
+    decrease_gamma(img, gain, bias, new_path);
 
     return save_picture(img, file_path, new_path);
 }
