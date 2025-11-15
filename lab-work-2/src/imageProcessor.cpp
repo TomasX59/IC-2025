@@ -204,6 +204,7 @@ void print_usage()
     cerr << "  -n                     create negative image\n";
     cerr << "  -y                     mirror image vertically\n";
     cerr << "  -x                     mirror image horizontally\n";
+    cerr << "  -i                     show image processing stats\n";
     cerr << "  -h, --help             display this help and exit\n";
     cerr << "\nOptions:\n";
     cerr << "  -l DEGREES             rotate counterclockwise by 90°\n";
@@ -217,19 +218,19 @@ void print_usage()
 /// without some do-it-all functions of OpenCV, implement the operations!!
 /// (Open Comando Vermelho Rogério Lemgruber)
 int main(const int argc, char *const *argv) {
-    // todo: processing time
     string file_path;
     int rotation = 0;
     double b_gain = 1.0, d_gain = 1.0;
     int b_bias = 0, d_bias = 0;
-    bool ngtv = false, flip_y = false, flip_x = false;
+    bool ngtv = false, flip_y = false, flip_x = false, proc_i = false;
 
     int opt;
-    while ((opt = getopt(argc, argv, "nyxl:b:d:h")) != -1) {
+    while ((opt = getopt(argc, argv, "nyxil:b:d:h")) != -1) {
         switch (opt) {
         case 'n': ngtv = true; break;
         case 'y': flip_y = true; break;
         case 'x': flip_x = true; break;
+        case 'i': proc_i = true; break;
         case 'l':
             rotation = stoi(optarg);
             if (rotation % 90 != 0) {
@@ -269,6 +270,8 @@ int main(const int argc, char *const *argv) {
         return 1;
     }
 
+    cout << "Reading image from: " << file_path << endl;
+
     Mat img = imread(file_path, IMREAD_COLOR);
     if (img.empty())
     {
@@ -277,15 +280,70 @@ int main(const int argc, char *const *argv) {
         return 1;
     }
 
+    if (proc_i) {
+        cout << "\n====== IMAGE INFO ====== " << endl;
+        cout << "Dimensions: " << img.rows << " x " << img.cols << endl;
+        cout << "Channels: " << img.channels() << ", " << img.type() << endl;
+        cout << "Image data size: " << img.total() * img.elemSize() / (1024 * 1024) << " MB" << endl;
+    }
+
     ostringstream new_path;
+    ostringstream proc_info;
+
+    TickMeter tm_total;
+    tm_total.start();
 
     // image processors
-    if (ngtv) negative(img, new_path);
-    if (flip_y) flip_vertical(img, new_path);
-    if (flip_x) flip_horizontal(img, new_path);
-    if (rotation != 0) rotate(img, rotation, new_path);
-    if (b_gain != 1.0 || b_bias != 0) increase_contrbright(img, b_gain, b_bias, new_path);
-    if (d_gain != 1.0 || d_bias != 0) decrease_contrbright(img, d_gain , d_bias, new_path);
+    if (ngtv) {
+        TickMeter tm;
+        tm.start();
+        negative(img, new_path);
+        tm.stop();
+        proc_info << "Negative inversion - " << tm.getTimeMilli() << "ms." << endl;
+    }
+    if (flip_y) {
+        TickMeter tm;
+        tm.start();
+        flip_vertical(img, new_path);
+        tm.stop();
+        proc_info << "Flip Vertical - " << tm.getTimeMilli() << "ms." << endl;
+    }
+    if (flip_x) {
+        TickMeter tm;
+        tm.start();
+        flip_horizontal(img, new_path);
+        tm.stop();
+        proc_info << "Flip Horizontal - " << tm.getTimeMilli() << "ms." << endl;
+    }
+    if (rotation != 0) {
+        TickMeter tm;
+        tm.start();
+        rotate(img, rotation, new_path);
+        tm.stop();
+        proc_info << "Rotate by " << rotation << " degrees - " << tm.getTimeMilli() << "ms." << endl;
+    }
+    if (b_gain != 1.0 || b_bias != 0) {
+        TickMeter tm;
+        tm.start();
+        increase_contrbright(img, b_gain, b_bias, new_path);
+        tm.stop();
+        proc_info << "C/B increase - " << tm.getTimeMilli() << "ms." << endl;
+    };
+    if (d_gain != 1.0 || d_bias != 0) {
+        TickMeter tm;
+        tm.start();
+        decrease_contrbright(img, d_gain , d_bias, new_path);
+        tm.stop();
+        proc_info << "C/B increase - " << tm.getTimeMilli() << "ms." << endl;
+    }
+
+    tm_total.stop();
+
+    if (proc_i) {
+        cout << "\n====== PERFORMANCE ====== " << endl;
+        cout << proc_info.str();
+        cout << "Total processing time: " << tm_total.getAvgTimeMilli() << "ms.\n" << endl;
+    }
 
     return save_picture(img, file_path, new_path);
 }
