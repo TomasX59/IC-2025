@@ -54,8 +54,7 @@ void negative(Mat& img, ostringstream& new_path) {
 /// opencv easy way
 void flip_vertical(Mat& img, ostringstream& new_path) {
     // 1. take n number of rows of image
-    // 2. for each row y, get its pointer
-    // 3. save the new (x, y) pixel with the new y value
+    // 2. for each top and bottom row, swap their column pixels
     const int cols = img.cols;
     const int rows = img.rows;
     const int chnl = img.channels();
@@ -77,15 +76,15 @@ void flip_vertical(Mat& img, ostringstream& new_path) {
 /// -x mirror image horizontally
 /// opencv easy way
 void flip_horizontal(Mat& img, ostringstream& new_path) {
-    // 1. take n number of columns of image
-    // 2. for each (x, y) pixel, subtract n by the x-axis value
-    // 3. save the new (x, y) pixel with the new x value
+    // 1. take n number of rows of image
+    // 2. for each row, swap the first and last column
     const int cols = img.cols;
     const int rows = img.rows;
     const int chnl = img.channels();
 
     for (int i = 0; i < rows; i++) {
         uchar* row = img.ptr<uchar>(i);
+
         for (int j = 0; j < cols / 2; j++) {
             for (int k = 0; k < chnl; k++) {
                 const uchar buff = row[j * chnl + k];
@@ -114,8 +113,8 @@ int main(const int argc, const char *argv[])
         cerr << "  -y                    mirror image vertically\n";
         cerr << "  -x                    mirror image horizontally\n";
         cerr << "  -l DEGREES            rotate image by multiples of 90°\n";
-        cerr << "  -b INTENSITY          increase brightness\n";
-        cerr << "  -d INTENSITY          decrease brightness\n";
+        cerr << "  -b GAIN BIAS          increase gamma\n";
+        cerr << "  -d GAIN BIAS          decrease gamma\n";
         cerr << "  -h, --help            display this help and exit\n";
         return 1;
     }
@@ -138,7 +137,7 @@ int main(const int argc, const char *argv[])
     // flip_vertical(img, new_path);
 
     // -x mirror image horizontally
-    flip_horizontal(img, new_path);
+    // flip_horizontal(img, new_path);
 
     // -l <degrees> rotate image by multiples of 90º
     // opencv easy way
@@ -147,13 +146,13 @@ int main(const int argc, const char *argv[])
     // 1. take g and b, gain and bias from user input
     // 2. for each row, for each col, for each channel, multiply by g and add b
     // 3. save new image
-    // opencv easy way -> convertTo();
+    // opencv easy way -> convertTo() or LUT();
 
     // -d <intensity> decreases brightness
     // 1. take g and b, gain and bias from user input
     // 2. for each row, for each col, for each channel, divide by g and subtract b
     // 3. save new image
-    // opencv easy way -> convertTo();
+    // opencv easy way -> convertTo() or LUT();
 
     return save_picture(img, file_path, new_path);
 }
