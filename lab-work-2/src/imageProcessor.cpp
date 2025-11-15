@@ -2,6 +2,7 @@
 #include <opencv2/imgcodecs.hpp>
 #include <iostream>
 #include <unistd.h>
+#include <filesystem>
 
 using namespace cv;
 using namespace std;
@@ -10,11 +11,28 @@ using namespace std;
 int save_picture(const Mat & img, const string& file_path, const ostringstream& new_path)
 {
     if (new_path.str().length() == 0) return 1;
+    const string output = "out/";
 
     try {
-        const string extension = file_path.substr(file_path.find_last_of('.') + 1);
-        const string final_path = file_path.substr(0, file_path.find_last_of('.'))
-            + new_path.str() + '.' + extension;
+        const size_t last_slh = file_path.find_last_of("/");
+        const size_t last_dot = file_path.find_last_of(".");
+
+        string folder;
+        if (last_slh == string::npos) {
+            // No slash - file in current directory
+            folder = output;
+        } else {
+            folder = file_path.substr(0, last_slh + 1) + output;
+        }
+
+        std::filesystem::create_directories(folder);
+
+        const size_t name_start = last_slh == string::npos ? 0 : last_slh + 1;
+        const size_t name_length = last_dot - name_start;
+        const string name = file_path.substr(name_start, name_length);
+
+        const string extension = file_path.substr(last_dot + 1);
+        const string final_path = folder + name + new_path.str() + '.' + extension;
 
         imwrite(final_path, img);
         cout << "Picture saved to: " << final_path << endl;
@@ -29,6 +47,11 @@ int save_picture(const Mat & img, const string& file_path, const ostringstream& 
 /// opencv easy way -> cv::LUT()
 void negative(Mat& img, ostringstream& new_path)
 {
+    if (img.depth() != CV_8U) {
+        cerr << "Warning: negative() only supports 8-bit images. Will convert with wacky results...\n";
+        img.convertTo(img, CV_8U);
+    }
+
     const int cols = img.cols;
     const int rows = img.rows;
     const int chnl = img.channels();
