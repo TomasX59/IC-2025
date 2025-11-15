@@ -13,11 +13,11 @@ int save_picture(const Mat & img, const string& file_path, const ostringstream& 
 {
     if (new_path.str().length() == 0) {
         cout << "No changes made to picture." << endl;
-        return 1;
+        return 0;
     }
-    const string output = "out/";
 
     try {
+        const string output = "out/";
         const size_t last_slh = file_path.find_last_of("/");
         const size_t last_dot = file_path.find_last_of(".");
 
@@ -208,10 +208,13 @@ void rotate(Mat& img, int rotation, ostringstream& new_path)
         // actually both horizontal AND vertical flips
         if (img.isContinuous()) {
             uchar* data = img.ptr<uchar>(0);
-            const int elements = rows * cols * chnl;
+            const int elements = rows * cols;
 
             for (int i = 0; i < elements / 2; i++) {
-                swap(data[i], data[(elements - i - 1)]);
+                for (int k = 0; k < chnl; k++) {
+                    swap(data[i * chnl + k],
+                        data[(elements - i - 1) * chnl + k]);
+                }
             }
         } else {
             for (int i = 0; i < rows / 2; i++) {
@@ -262,15 +265,34 @@ void rotate(Mat& img, int rotation, ostringstream& new_path)
 /// opencv easy way -> convertTo()
 void increase_contrbright(Mat& img, const double& gain, const int& bias, ostringstream& new_path)
 {
+    // this is to handle images with alpha channel
+    if (img.channels() == 4) {
+        vector<Mat> channels;
+
+        split(img, channels);
+        for (int i = 0; i < 3; i++) channels[i].convertTo(channels[i], -1, gain, bias);
+        merge(channels, img);
+
+        new_path << "_icb";
+        return;
+    }
+
+    // Update: again, handling non-8bit images using OpenCV
+    if (img.depth() != CV_8U) {
+        img.convertTo(img, -1, gain, bias);
+        new_path << "_icb";
+        return;
+    }
+
     // this algo would be just 3 nested iterators, to apply some changes
     // to each channel of each column of each row, which is already done
     // in the negative() function. So for this one I took the liberty of
     // using Mat::forEach(), that actually can take a lambda and also
     // parallelizes execution under the hood.
     // update: I'm changing this to support more channels than bgr
-    img.forEach<uchar>([&gain, &bias](uchar& pixel, const int[]) {
-       pixel = saturate_cast<uchar>(pixel * gain + bias);
-    });
+    img.forEach<uchar>([&](uchar& pixel, const int[]) {
+            pixel = saturate_cast<uchar>(pixel * gain + bias);
+        });
 
     new_path << "_icb";
 }
@@ -285,21 +307,34 @@ void decrease_contrbright(Mat& img, const double& gain, const int& bias, ostring
 }
 
 /// never thought I would live to see the day I would write
-/// something like this, as a programmer.
+/// something like this myself, as a programmer.
 void print_usage()
 {
-    cerr << "Usage: imageProcessor [OPTION] FILE\n\n";
-    cerr << "Process images with various transformations.\n";
-    cerr << "\nFlags:\n";
-    cerr << "  -n                     create negative image\n";
-    cerr << "  -y                     mirror image vertically\n";
-    cerr << "  -x                     mirror image horizontally\n";
-    cerr << "  -i                     show image processing stats\n";
-    cerr << "  -h, --help             display this help and exit\n";
-    cerr << "\nOptions:\n";
-    cerr << "  -l DEGREES             rotate by multiples of 90°\n";
-    cerr << "  -b [1.0-10.0] [0-100]  increase contrast and brightness\n";
-    cerr << "  -d [1.0-10.0] [0-100]  decrease contrast and brightness\n";
+    cerr << "Usage: imageProcessor [OPTIONS] FILE\n";
+
+    cerr << "\nProcess images with various transformations and adjustments.\n";
+
+    cerr << "\nTransformations:\n";
+    cerr << "  -y              mirror image vertically\n";
+    cerr << "  -x              mirror image horizontally\n";
+
+    cerr << "\nColor Adjustments:\n";
+    cerr << "  -n              create negative image\n";
+    cerr << "  -l DEGREES      rotate by multiples of 90°\n";
+    cerr << "  -b GAIN BIAS    increase contrast/brightness (gain: 1.0-10.0, bias: 0-100)\n";
+    cerr << "  -d GAIN BIAS    decrease contrast/brightness (gain: 1.0-10.0, bias: 0-100)\n";
+
+    cerr << "\nGeneral:\n";
+    cerr << "  -i              show image processing stats\n";
+    cerr << "  -h, --help      display this help and exit\n";
+
+    cerr << "Examples:\n";
+    cerr << "  imageProcessor -n image.jpg                      # Create negative\n";
+    cerr << "  imageProcessor -l 90 -x image.png                # Rotate and flip\n";
+    cerr << "  imageProcessor -nxy -l 180 -b 2.0 10 image.bmp   # Chain operations\n\n";
+
+    cerr << "Supported formats: JPG, PNG, BMP, TIFF, WEBP\n";
+    cerr << "Output location: ./out/image_transform.jpg, same level as image.jpg\n";
 }
 
 /// Without using possible existing functions on OpenCV, but
@@ -391,42 +426,42 @@ int main(const int argc, char *const *argv) {
         tm.start();
         negative(img, new_path);
         tm.stop();
-        proc_info << "Negative inversion - " << tm.getTimeMilli() << "ms." << endl;
+        proc_info << "Negative inversion: " << tm.getTimeMilli() << "ms." << endl;
     }
     if (flip_y) {
         TickMeter tm;
         tm.start();
         flip_vertical(img, new_path);
         tm.stop();
-        proc_info << "Flip Vertical - " << tm.getTimeMilli() << "ms." << endl;
+        proc_info << "Flip Vertical: " << tm.getTimeMilli() << "ms." << endl;
     }
     if (flip_x) {
         TickMeter tm;
         tm.start();
         flip_horizontal(img, new_path);
         tm.stop();
-        proc_info << "Flip Horizontal - " << tm.getTimeMilli() << "ms." << endl;
+        proc_info << "Flip Horizontal: " << tm.getTimeMilli() << "ms." << endl;
     }
     if (rotation != 0) {
         TickMeter tm;
         tm.start();
         rotate(img, rotation, new_path);
         tm.stop();
-        proc_info << "Rotate by " << rotation << " degrees - " << tm.getTimeMilli() << "ms." << endl;
+        proc_info << "Rotate by " << rotation << " degrees: " << tm.getTimeMilli() << "ms." << endl;
     }
     if (b_gain != 1.0 || b_bias != 0) {
         TickMeter tm;
         tm.start();
         increase_contrbright(img, b_gain, b_bias, new_path);
         tm.stop();
-        proc_info << "C/B increase - " << tm.getTimeMilli() << "ms." << endl;
+        proc_info << "C/B increase: " << tm.getTimeMilli() << "ms." << endl;
     };
     if (d_gain != 1.0 || d_bias != 0) {
         TickMeter tm;
         tm.start();
         decrease_contrbright(img, d_gain , d_bias, new_path);
         tm.stop();
-        proc_info << "C/B decrease - " << tm.getTimeMilli() << "ms." << endl;
+        proc_info << "C/B decrease (parallel): " << tm.getTimeMilli() << "ms." << endl;
     }
 
     tm_total.stop();
