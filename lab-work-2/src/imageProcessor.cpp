@@ -9,6 +9,8 @@ using namespace std;
 /// save changes to new file
 int save_picture(const Mat & img, const string& file_path, const ostringstream& new_path)
 {
+    if (new_path.str().length() == 0) return 1;
+
     try {
         const string extension = file_path.substr(file_path.find_last_of('.') + 1);
         const string final_path = file_path.substr(0, file_path.find_last_of('.'))
@@ -49,7 +51,7 @@ void negative(Mat& img, ostringstream& new_path)
         }
     }
 
-    new_path << "_negative";
+    new_path << "_negtv";
 }
 
 /// -y mirror image vertically;
@@ -65,7 +67,7 @@ void flip_vertical(Mat& img, ostringstream& new_path)
         std::swap_ranges(top_row, top_row + row_size, bot_row);
     }
 
-    new_path << "_flipvert";
+    new_path << "_flipy";
 }
 
 /// -x mirror image horizontally;
@@ -74,94 +76,104 @@ void flip_horizontal(Mat& img, ostringstream& new_path)
 {
     const int cols = img.cols;
     const int rows = img.rows;
-    const int cnhl = img.channels();
+    const int chnl = img.channels();
 
     for (int i = 0; i < rows; i++) {
         uchar* row = img.ptr<uchar>(i);
         for (int j = 0; j < cols / 2; j++) {
-            for (int k = 0; k < cnhl; k++) {
-                swap(row[j * cnhl + k], row[(cols - j - 1) * cnhl + k]);
+            for (int k = 0; k < chnl; k++) {
+                swap(row[j * chnl + k], row[(cols - j - 1) * chnl + k]);
             }
         }
     }
 
-    new_path << "_fliphoriz";
+    new_path << "_flipx";
 }
 
 // -l <degrees> rotate image by multiples of 90º;
 // opencv easy way -> rotate(); transpose(); and flip();
-void rotate(Mat& img, const int rotation, ostringstream& new_path)
+void rotate(Mat& img, int rotation, ostringstream& new_path)
 {
-    if (rotation % 360 == 0) {
-        new_path << "_rotate360";
-        return;
-    }
+    rotation = (rotation % 360 + 360) % 360;
+
+    if (rotation == 0) return;
+
+    const int cols = img.cols;
+    const int rows = img.rows;
+    const int chnl = img.channels();
 
     // counterclockwise 90 degrees rotation
-    if (rotation / 90 == 1) {
-        Mat rot_img = Mat(img.cols, img.rows, img.type());
+    if (rotation == 90) {
+        Mat rot_img = Mat(cols, rows, img.type());
 
-        for (int i = 0; i < img.rows; i++) {
-            const Vec3b* src_row = img.ptr<Vec3b>(i);
-            for (int j = 0; j < img.cols; j++) {
-                Vec3b* dst_row = rot_img.ptr<Vec3b>(img.cols - j - 1);
-                dst_row[i] = src_row[j];
+        for (int i = 0; i < rows; i++) {
+            const uchar* src_row = img.ptr<uchar>(i);
+            for (int j = 0; j < cols; j++) {
+                uchar* dst_row = rot_img.ptr<uchar>(cols - j - 1);
+                for (int k = 0; k < chnl; k++) {
+                    dst_row[i * chnl + k] = src_row[j * chnl + k];
+                }
             }
         }
         img = rot_img;
-        new_path << "_rotate90";
+        new_path << "_r90";
         return;
     }
 
     // 180 degrees rotation
-    if (rotation / 90 == 2) {
-        const int cols = img.cols;
-        const int rows = img.rows;
-
+    if (rotation == 180) {
         // curiously, if img memory is continuous, this algo is the same
         // for horizontal flip. But without restraining the rows, it is
         // actually both horizontal AND vertical flips
         if (img.isContinuous()) {
-            Vec3b* data = img.ptr<Vec3b>(0);
-            const int elements = rows * cols;
+            uchar* data = img.ptr<uchar>(0);
+            const int elements = rows * cols * chnl;
 
             for (int i = 0; i < elements / 2; i++) {
                 swap(data[i], data[(elements - i - 1)]);
             }
         } else {
             for (int i = 0; i < rows / 2; i++) {
-                Vec3b* top_row = img.ptr<Vec3b>(i);
-                Vec3b* bot_row = img.ptr<Vec3b>(rows - i - 1);
+                uchar* top_row = img.ptr<uchar>(i);
+                uchar* bot_row = img.ptr<uchar>(rows - i - 1);
 
                 for (int j = 0; j < cols; j++) {
-                    swap(top_row[j], bot_row[cols - j - 1]);
+                    for (int k = 0; k < chnl; k++) {
+                        swap(top_row[j * chnl + k],
+                            bot_row[(cols - j - 1) * chnl + k]);
+                    }
                 }
             }
             if (rows % 2 == 1) {
-                Vec3b* mid_row = img.ptr<Vec3b>(rows / 2);
+                uchar* mid_row = img.ptr<uchar>(rows / 2);
 
                 for (int j = 0; j < cols / 2; j++) {
-                    swap(mid_row[j], mid_row[cols - 1 - j]);
+                    for (int k = 0; k < chnl; k++) {
+                        swap(mid_row[j * chnl + k],
+                            mid_row[(cols - 1 - j) * chnl + k]);
+                    }
                 }
             }
         }
-        new_path << "_rotate180";
+        new_path << "_r180";
         return;
     }
 
     // clockwise 90 degrees rotation
-    if (rotation / 90 == 3) {
-        Mat rot_img = Mat(img.cols, img.rows, img.type());
+    if (rotation == 270) {
+        Mat rot_img = Mat(cols, rows, img.type());
 
-        for (int i = 0; i < img.rows; i++) {
-            const Vec3b* src_row = img.ptr<Vec3b>(i);
-            for (int j = 0; j < img.cols; j++) {
-                Vec3b* dst_row = rot_img.ptr<Vec3b>(j);
-                dst_row[img.rows - i - 1] = src_row[j];
+        for (int i = 0; i < rows; i++) {
+            const uchar* src_row = img.ptr<uchar>(i);
+            for (int j = 0; j < cols; j++) {
+                uchar* dst_row = rot_img.ptr<uchar>(j);
+                for (int k = 0; k < chnl; k++) {
+                    dst_row[(rows - i - 1) * chnl + k] = src_row[j * chnl + k];
+                }
             }
         }
         img = rot_img;
-        new_path << "_rotate270";
+        new_path << "_r270";
     }
 }
 
@@ -174,26 +186,20 @@ void increase_contrbright(Mat& img, const double& gain, const int& bias, ostring
     // in the negative() function. So for this one I took the liberty of
     // using Mat::forEach(), that actually can take a lambda and also
     // parallelizes execution under the hood.
-    img.forEach<Vec3b>([&gain, &bias](Vec3b &pixel, const int[]) -> void {
-        pixel[0] = saturate_cast<uchar>(pixel[0] * gain + bias); //b
-        pixel[1] = saturate_cast<uchar>(pixel[1] * gain + bias); //g
-        pixel[2] = saturate_cast<uchar>(pixel[2] * gain + bias); //r
+    // update: I'm changing this to support other channels than bgr
+    img.forEach<uchar>([&gain, &bias](uchar& pixel, const int[]) {
+       pixel = saturate_cast<uchar>(pixel * gain + bias);
     });
 
-    new_path << "_increased_contrbright";
+    new_path << "_icb";
 }
 
 // -d <intensity> decreases contrast and brightness;
-// opencv easy way -> convertTo()
 void decrease_contrbright(Mat& img, const double& gain, const int& bias, ostringstream& new_path)
 {
-    img.forEach<Vec3b>([&gain, &bias](Vec3b &pixel, const int[]) -> void {
-        pixel[0] = saturate_cast<uchar>(pixel[0] / gain - bias); //b
-        pixel[1] = saturate_cast<uchar>(pixel[1] / gain - bias); //g
-        pixel[2] = saturate_cast<uchar>(pixel[2] / gain - bias); //r
-    });
-
-    new_path << "_decreased_contrbright";
+    // c'mon, I'm using the easy way now.
+    img.convertTo(img, -1, 1.0/gain, -bias);
+    new_path << "_dcb";
 }
 
 void print_usage()
@@ -207,9 +213,9 @@ void print_usage()
     cerr << "  -i                     show image processing stats\n";
     cerr << "  -h, --help             display this help and exit\n";
     cerr << "\nOptions:\n";
-    cerr << "  -l DEGREES             rotate counterclockwise by 90°\n";
-    cerr << "  -b [0-10.0] [0-100]    increase contrast and brightness\n";
-    cerr << "  -d [0-10.0] [0-100]    decrease contrast and brightness\n";
+    cerr << "  -l DEGREES             rotate by multiples of 90°\n";
+    cerr << "  -b [1.0-10.0] [0-100]  increase contrast and brightness\n";
+    cerr << "  -d [1.0-10.0] [0-100]  decrease contrast and brightness\n";
 }
 
 /// Without using possible existing functions on OpenCV, but
@@ -241,7 +247,7 @@ int main(const int argc, char *const *argv) {
         case 'b':
             b_gain = stod(optarg);
             b_bias = stoi(argv[optind++]);
-            if (b_gain < 0 || b_bias < 0) {
+            if (b_gain < 1 || b_bias < 0) {
                 cerr << "Error: Invalid gain/bias values\n";
                 return 1;
             }
@@ -249,7 +255,7 @@ int main(const int argc, char *const *argv) {
         case 'd':
             d_gain = stod(optarg);
             d_bias = stoi(argv[optind++]);
-            if (d_gain < 0 || d_bias < 0) {
+            if (d_gain < 1 || d_bias < 0) {
                 cerr << "Error: Invalid gain/bias values\n";
                 return 1;
             }
@@ -272,7 +278,7 @@ int main(const int argc, char *const *argv) {
 
     cout << "Reading image from: " << file_path << endl;
 
-    Mat img = imread(file_path, IMREAD_COLOR);
+    Mat img = imread(file_path, IMREAD_UNCHANGED);
     if (img.empty())
     {
         cerr << "Could not read the image: " << file_path << endl;
@@ -283,7 +289,9 @@ int main(const int argc, char *const *argv) {
     if (proc_i) {
         cout << "\n====== IMAGE INFO ====== " << endl;
         cout << "Dimensions: " << img.rows << " x " << img.cols << endl;
-        cout << "Channels: " << img.channels() << ", " << img.type() << endl;
+        cout << "Channels: " << img.channels();
+        if (img.channels() == 4) cout << " (with alpha)";
+        cout << "." << endl;
         cout << "Image data size: " << img.total() * img.elemSize() / (1024 * 1024) << " MB" << endl;
     }
 
@@ -334,7 +342,7 @@ int main(const int argc, char *const *argv) {
         tm.start();
         decrease_contrbright(img, d_gain , d_bias, new_path);
         tm.stop();
-        proc_info << "C/B increase - " << tm.getTimeMilli() << "ms." << endl;
+        proc_info << "C/B decrease - " << tm.getTimeMilli() << "ms." << endl;
     }
 
     tm_total.stop();
