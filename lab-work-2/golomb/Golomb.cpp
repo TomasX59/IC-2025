@@ -1,108 +1,134 @@
 #include "Golomb.h"
-#include <cmath>
+
+#include <cstdint>
+#include <limits>
 #include <stdexcept>
 
-// Constructor
-Golomb::Golomb(int m, NegativeMode mode) : m(m), mode(mode) {
-    if (m <= 0) throw std::invalid_argument("Parameter m must be positive");
-}
+namespace {
+int ceilLog2(uint32_t value) {
+    if (value <= 1) return 0;
 
-// --- Mapping for negatives ---
-int Golomb::mapNumber(int n) const {
-    if (mode == SIGN_MAGNITUDE) {
-        return std::abs(n);
-    } else { // INTERLEAVED
-        if (n >= 0) return 2 * n;
-        else return -2 * n - 1;
+    int bits = 0;
+    uint64_t power = 1ull;
+    while (power < value) {
+        power <<= 1;
+        ++bits;
     }
+    return bits;
+}
+} // namespace
+
+Golomb::Golomb(int m, NegativeMode mode) : m(static_cast<uint32_t>(m)), mode(mode) {
+    if (m <= 0)
+        throw std::invalid_argument("Golomb parameter m must be positive");
 }
 
-int Golomb::unmapNumber(int n) const {
+uint64_t Golomb::mapNumber(int value) const {
+    int64_t signedValue = static_cast<int64_t>(value);
+
     if (mode == SIGN_MAGNITUDE) {
-        return n;
-    } else {
-        if (n % 2 == 0) return n / 2;
-        else return -(n + 1) / 2;
+        return static_cast<uint64_t>(signedValue < 0 ? -signedValue : signedValue);
     }
+
+    if (signedValue >= 0) {
+        return static_cast<uint64_t>(signedValue) * 2ull;
+    }
+    return static_cast<uint64_t>(-signedValue) * 2ull - 1ull;
 }
 
-// --- Encoding ---
+int64_t Golomb::unmapNumber(uint64_t mapped, bool negativeFlag) const {
+    if (mode == SIGN_MAGNITUDE) {
+        int64_t magnitude = static_cast<int64_t>(mapped);
+        return negativeFlag ? -magnitude : magnitude;
+    }
+
+    if ((mapped & 1ull) == 0ull) {
+        return static_cast<int64_t>(mapped / 2ull);
+    }
+
+    uint64_t magnitude = (mapped + 1ull) / 2ull;
+    return -static_cast<int64_t>(magnitude);
+}
+
 std::vector<bool> Golomb::encode(int n) const {
     std::vector<bool> bits;
 
-    bool negative = false;
-    if (mode == SIGN_MAGNITUDE && n < 0) {
-        negative = true;
-        n = -n;
-    }
+    bool negative = (mode == SIGN_MAGNITUDE) && (n < 0);
+    if (mode == SIGN_MAGNITUDE) bits.push_back(negative);
 
-    int mapped = mapNumber(n);
+    uint64_t mapped = mapNumber(n);
+    uint64_t q = mapped / m;
+    uint32_t r = static_cast<uint32_t>(mapped % m);
 
-    int q = mapped / m;
-    int r = mapped % m;
-
-    // Unary code for q: q times '1' followed by '0'
-    for (int i = 0; i < q; i++) bits.push_back(true);
+    for (uint64_t i = 0; i < q; ++i) bits.push_back(true);
     bits.push_back(false);
 
-    // Truncated binary code for r
-    int b = std::ceil(std::log2(m));
-    int cutoff = (1 << b) - m;
+    if (m > 1) {
+        int b = ceilLog2(m);
+        uint64_t base = 1ull << b;
+        uint32_t cutoff = static_cast<uint32_t>(base - m);
 
-    if (r < cutoff) {
-        // Represent r with b-1 bits
-        for (int i = b - 2; i >= 0; i--) bits.push_back((r >> i) & 1);
-    } else {
-        r += cutoff;
-        for (int i = b - 1; i >= 0; i--) bits.push_back((r >> i) & 1);
+        if (r < cutoff) {
+            for (int i = b - 2; i >= 0; --i) bits.push_back((r >> i) & 1);
+        } else {
+            r += cutoff;
+            for (int i = b - 1; i >= 0; --i) bits.push_back((r >> i) & 1);
+        }
     }
-
-    // Add sign bit if using sign-magnitude
-    if (mode == SIGN_MAGNITUDE) bits.insert(bits.begin(), negative);
 
     return bits;
 }
 
-// --- Decoding ---
 int Golomb::decode(const std::vector<bool>& bits, size_t& index) const {
+    if (index >= bits.size())
+        throw std::invalid_argument("Golomb decode: empty bit sequence");
+
     bool negative = false;
     if (mode == SIGN_MAGNITUDE) {
         negative = bits[index++];
     }
 
-    // Decode unary part (count 1s until 0)
-    int q = 0;
-    while (index < bits.size() && bits[index]) {
-        q++;
-        index++;
-    }
-    index++; // skip the 0
-
-    // Decode remainder
-    int b = std::ceil(std::log2(m));
-    int cutoff = (1 << b) - m;
-
-    int r = 0;
-    int temp = 0;
-    for (int i = 0; i < b - 1 && index + i < bits.size(); i++)
-        temp = (temp << 1) | bits[index + i];
-
-    if (temp < cutoff) {
-        r = temp;
-        index += b - 1;
-    } else {
-        temp = 0;
-        for (int i = 0; i < b && index + i < bits.size(); i++)
-            temp = (temp << 1) | bits[index + i];
-        r = temp - cutoff;
-        index += b;
+    uint64_t q = 0;
+    while (true) {
+        if (index >= bits.size()) throw std::invalid_argument("Golomb decode: missing unary terminator");
+        if (!bits[index]) {
+            ++index;
+            break;
+        }
+        ++q;
+        ++index;
     }
 
-    int mapped = q * m + r;
-    int value = unmapNumber(mapped);
+    uint64_t r = 0;
+    if (m > 1) {
+        int b = ceilLog2(m);
+        uint64_t base = 1ull << b;
+        uint32_t cutoff = static_cast<uint32_t>(base - m);
 
-    if (mode == SIGN_MAGNITUDE && negative)
-        value = -value;
+        uint32_t prefix = 0;
+        for (int i = 0; i < b - 1; ++i) {
+            if (index >= bits.size())
+                throw std::invalid_argument("Golomb decode: truncated remainder");
+            prefix = (prefix << 1) | (bits[index] ? 1u : 0u);
+            ++index;
+        }
 
-    return value;
+        if (prefix < cutoff) {
+            r = prefix;
+        } else {
+            if (index >= bits.size())
+                throw std::invalid_argument("Golomb decode: truncated remainder");
+            prefix = (prefix << 1) | (bits[index] ? 1u : 0u);
+            ++index;
+            r = prefix - cutoff;
+        }
+    }
+
+    uint64_t mapped = q * static_cast<uint64_t>(m) + r;
+    int64_t value = unmapNumber(mapped, negative);
+
+    if (value < std::numeric_limits<int>::min() || value > std::numeric_limits<int>::max())
+        throw std::overflow_error("Golomb decode: decoded value out of int range");
+
+    return static_cast<int>(value);
 }

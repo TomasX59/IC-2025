@@ -3,16 +3,17 @@
 
 #include <vector>
 #include <cstddef>
+#include <cstdint>
 
 enum NegativeMode { SIGN_MAGNITUDE, INTERLEAVED };
 
 class Golomb {
 private:
-    int m;
+    uint32_t m;
     NegativeMode mode;
 
-    int mapNumber(int n) const;
-    int unmapNumber(int n) const;
+    uint64_t mapNumber(int value) const;
+    int64_t unmapNumber(uint64_t mapped, bool negativeFlag) const;
 
 public:
     Golomb(int m, NegativeMode mode = INTERLEAVED);

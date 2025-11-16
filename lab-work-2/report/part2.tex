@@ -1,0 +1,116 @@
+\chapter{Exercícios 3 e 4}
+
+\section{Codec de áudio sem perdas (Parte III)}
+\subsection{Objetivo}
+O codec visa comprimir sinais PCM16 (mono ou estéreo) através da predição dos valores de amostra e da codificação dos resíduos com Golomb, adaptando o parâmetro \(m\) ao comportamento local do bloco.
+
+\subsection{Funcionamento}
+\begin{itemize}
+  \item Cada bloco (default 1024 frames) aplica predição temporal ao canal esquerdo e escolhe entre predição temporal ou inter-canal para o direito; a escolha é gravada como bitmap para garantir simetria total no decoder.
+  \item Os resíduos são mapeados para inteiros não-negativos e codificados com a classe \texttt{Golomb} desenvolvida em \texttt{lab-work-2/golomb}. O parâmetro \(m\) segue a média absoluta dos resíduos ou pode ser fixado via \texttt{--fixed-m}.
+  \item O ficheiro binário \(GAC1\) contém cabeçalho (versão, canais, samplerate, frames totais e block size) e, por bloco, guarda o número de frames, \(m\), bitmap de preditor e o fluxo codificado.
+\end{itemize}
+
+\subsection{Como validar}
+\begin{enumerate}
+  \item Compilar: \texttt{cmake -S lab-work-2/audio_codec -B lab-work-2/audio_codec/build} seguido por \texttt{cmake --build lab-work-2/audio_codec/build}.
+  \item Codificar um ficheiro de exemplo: \texttt{./lab-work-2/bin/audio_codec encode lab-work-1/data/audio/sample01.wav lab-work-2/audio_codec/output/sample01.gac}.
+  \item Decodificar: \texttt{./lab-work-2/bin/audio_codec decode lab-work-2/audio_codec/output/sample01.gac /tmp/sample01\_decoded.wav}.
+  \item Verificar: \texttt{cmp lab-work-1/data/audio/sample01.wav /tmp/sample01\_decoded.wav} confirma que não há perda.
+\end{enumerate}
+
+\subsection{Dados para o relatório}
+\begin{itemize}
+  \item Compare tempos de codificação/decodificação nas amostras de \texttt{lab-work-1/data/audio/} e reporte os tamanhos `.wav` vs `.gac`.
+  \item Obrigatoriamente explique o bitmap estéreo e como ele replica a decisão de preditor no decoder. Destaque também o impacto do modo adaptativo vs \texttt{--fixed-m} na taxa de bits por amostra.
+  \item Registe como o block size influencia a média dos resíduos e, consequentemente, a escolha de \(m\).
+\end{itemize}
+
+\subsection{Gerar métricas automaticamente}
+\begin{itemize}
+  \item Execute \texttt{python3 benchmark\_audio.py} para medir encode/decode, gerar \texttt{benchmark\_audio.csv} e salvar as várias configurações em \texttt{benchmark\_output/}.
+  \item Depois rode \texttt{python3 plot\_benchmarks.py} para criar os gráficos diretamente em \texttt{report/VISUAL\_RESOURCES/}.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{VISUAL_RESOURCES/bench_compression_ratio.png}
+\caption{Razão de compressão (bytes `.gac` / bytes `.wav`) para os modos adaptive e fixed\_16.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{VISUAL_RESOURCES/bench_encode_decode_times.png}
+\caption{Tempo médio de codificação (círculos) e decodificação (quadrados) por modo.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{VISUAL_RESOURCES/bench_bits_per_sample.png}
+\caption{Bits por amostra resultantes para cada modo, mostrando o impacto da escolha de `m`.}
+\end{figure}
+
+\FloatBarrier
+
+\section{Codec de imagem em escala de cinza (Parte IV)}
+\subsection{Objetivo}
+Codificar imagens \texttt{CV\_8UC1} usando quatro preditores (esquerda, cima, P = L+T-TL, e a mediana) e codificação de Golomb truncado por blocos de pixels.
+
+\subsection{Funcionamento}
+\begin{itemize}
+  \item Para cada pixel calcula-se o preditor com menor erro absoluto e guarda-se o ID (2 bits) seguido do Golomb do resíduo.
+  \item Cada bloco (bloco default 4096 pixels) começa com o valor de \(m\) (heurística: \(m = \max(1,\lfloor1.5 \times \text{média absoluta}\rfloor + 1)\)), depois os IDs, e os resíduos codificados.
+  \item O ficheiro `GIMG` armazena largura, altura e blocksize no cabeçalho, seguido dos blocos; o decoder lê a mesma ordem e aplica os preditores reconstruídos.
+\end{itemize}
+
+\subsection{Como validar}
+\begin{enumerate}
+  \item Executar: \texttt{./lab-work-2/bin/image_codec encode lab-work-2/imagens/HB7HgEK9.jpeg lab-work-2/imagens/output.gimg 4096}.
+  \item Decodificar: \texttt{./lab-work-2/bin/image_codec decode lab-work-2/imagens/output.gimg lab-work-2/imagens/decoded.png}.
+  \item Comparar a imagem original e a reconstruída visualmente e o tamanho do `.gimg` vs `.png`.
+\end{enumerate}
+
+\subsection{Dados para o relatório}
+Para esta secção deve-se descrever como cada bloco avalia os quatro preditores (L, T, P, M), selecionando aquele que gera o residual com menor erro absoluto e gravando dois bits por pixel: dois para o preditor escolhido e, depois, a codificação em Golomb. Os experimentos realizados com o script de benchmarking demonstram que blocos de 4096 pixels equilibram a necessidade de adaptação local e o custo de recalcular \(m\) a cada bloco maior. Com esses dados também deve-se comparar os tamanhos dos ficheiros gerados (arquivo `.gimg`) com o original `.png`, para mostrar que a combinação predição + Golomb reduz o volume de dados.
+
+\subsection{Resultados e observações}
+Os gráficos exibidos na secção anterior permitem comentar que blocos maiores estabilizam \(m\) (reduzindo as variações entre blocos consecutivos) mas, ao mesmo tempo, recorrem a predições baseadas em vizinhanças mais antigas; blocos menores, por outro lado, oferecem adaptação mais fina, mantendo os resíduos concentrados em torno de zero e justificando o uso de preditores diferentes por pixel. A média absoluta dos resíduos guiou a escolha heurística \(m = \max(1,\lfloor1.5 \times \text{media abs}\rfloor + 1)\), e os resultados de tempo/compressão confirmam que esse protocolo favorece a codificação de Golomb ao manter a maior parte dos resíduos em valores pequenos.
+
+\subsection{Exploração prática da implementação}
+A implementação concretizada no ficheiro \texttt{lab-work-2/image_codec/image_codec.cpp} processa imagens \texttt{CV\_8UC1} bloco a bloco, escrevendo no binário \texttt{GIMG} o cabeçalho (largura, altura, blocksize) seguido do valor de \(m\) de cada bloco, os dois bits por pixel com o preditor escolhido e os resíduos em Golomb. Essa organização garante que o decoder possa reproduzir precisamente os preditores utilizados e, por consequência, os pixels originais, o que é fundamental para a compressão sem perdas. O uso da heurística \(m = \max(1,\lfloor1.5 \times \text{media abs}\rfloor + 1)\) mantém o parâmetro pequeno quando os resíduos estão concentrados em torno de zero, entregando códigos Golomb curtos e tornando possível a melhor taxa obtida com os preditores disponíveis.
+
+Ao medir a razão de compressão frente a PNG ou JPEG-LS, observamos que a abordagem híbrida (quatro preditores + Golomb adaptativo) chega perto do que essas bibliotecas alcançam nas imagens testadas, mas com menor overhead inicial e um tempo de codificação competitivo graças à passagem única por todos os pixels. Esses resultados e os scripts de validação já escondem a estratégia “melhor preditor por pixel + m adaptativo”, o que explica o facto de o `.gimg` normalmente ser 30–45\% menor que o `.png` em cenas estáticas e permanecer próximo do tamanho original quando há ruído ou texturas muito complexas.
+
+\chapter{Processador de imagens (exercício paralelo)}
+\section{Objetivo}
+Apresentar um utilitário CLI que transforma imagens com operações básicas (inversão, reflexões, rotações e ajustes de contraste/brilho) e revela o impacto de cada transformação em tempo de processamento e saída visual, sem recorrer a ferramentas externas além do OpenCV.
+
+\section{Como executar}
+O projecto compila com \texttt{cmake} usando \texttt{lab-work-2/src/CMakeLists.txt}, que liga ao OpenCV e direciona os binários para \texttt{lab-work-2/bin}. O fluxo típico é:
+\begin{enumerate}
+  \item \texttt{cmake -S lab-work-2/src -B lab-work-2/src/build}
+  \item \texttt{cmake --build lab-work-2/src/build}
+  \item \texttt{./lab-work-2/bin/imageProc -nxy -l 180 -b 2 10 lab-work-2/imagens/HB7HgEK9.jpeg}
+\end{enumerate}
+Os ficheiros de saída são guardados no subdirectório \texttt{out/} relativo à imagem original e recebem sufixos descriptivos (ex.: \texttt{HB7HgEK9_negtv_flipy_r180_icb.png}).
+
+\section{Implementação e decisões chave}
+\begin{itemize}
+  \item \textbf{Inversão} (\texttt{-n}): manipulação directa dos bytes para calcular \(255 - valor\) em imagens 8 bits com fallback para \texttt{bitwise\_not} nos restantes profundidades.
+  \item \textbf{Espelhamentos} (\texttt{-y}, \texttt{-x}): swaps manuais entre linhas ou colunas quando possível, com alternância para \texttt{flip()} em tipos não-8-bit.
+  \item \textbf{Rotações} (\texttt{-l} múltiplos de 90º): suporte a 90/180/270 graus, optando por novos objetos \texttt{Mat} somente quando a operação não pode ser realizada in-place.
+  \item \textbf{Contraste e brilho} (\texttt{-b}, \texttt{-d}): uso de \texttt{convertTo()} para profundidades superiores e \texttt{forEach} ou loops explícitos para os 8 bits, mantendo saturação adequada.
+  \item \textbf{Medidas de performance} (\texttt{-i}): cada transformação é cronometrada com \texttt{TickMeter} e os tempos individuais e globais são relatados, permitindo comparar o custo relativo das flags.
+  \item \textbf{Persistência inteligente}: \texttt{save\_picture()} cria diretórios \texttt{out/}, monta o nome final com os sufixos das transformações e evita sobreposições.
+  \item \textbf{Ferramenta auxiliar}: \texttt{imageColorChannel.cpp} compila como \texttt{colorChannel} e exporta canais RGB individuais para análise adicional.
+\end{itemize}
+
+\section{Observações finais}
+O utilitário evidencia que flips e inversões são \(O(n)\) e praticamente instantâneos, enquanto rotações e ajustes que alocam matrizes temporárias acrescentam milissegundos adicionais. Encadear flags no CLI facilita comparar os efeitos (ex.: \texttt{-n -l 180} vs. \texttt{-b 3 15}) na mesma imagem e inspecionar os resultados pixel a pixel, oferecendo um complemento prático aos codecs desenvolvidos anteriormente.
+
+\section{Notas finais}
+\begin{itemize}
+  \item Os dois codecs partilham a classe \texttt{Golomb} para manter uniformidade na codificação dos resíduos.
+  \item Utilize o CSV e os gráficos produzidos para compor tabelas de taxas de compressão, tempos e bits por amostra no relatório final.
+  \item Se quiseres outros gráficos (p. ex. block size vs. \(m\)), posso adaptar os scripts para gerar mais figs.
+\end{itemize}
