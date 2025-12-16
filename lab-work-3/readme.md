@@ -1,9 +1,35 @@
-In this work, you will have to find the best way to compress the file https://huggingface.co/Qwen/Qwen2-0.5B/resolve/main/model.safetensors. This file contains the model parameters of a large language model (LLM) and is almost 1 GB long. You can use all means that you find appropriate to compress it, including, of course, a deep analysis of the file contents and structure. Your grade will be related to the combination of compression ratio, computation time to compress / decompress the file, and memory usage.
+# TRABALHO LABORATORIAL Nº 3: Compressão de Parâmetros de LLM (Qwen2-0.5B)
 
-PROFESSOR SUGGESTION: create different algorithms that trade faster execution for a worse compression, as well as slow algorithms that has the best compression, as well as a median speed algorithm with median compression. 3 should be enough.
+**Ficheiro:** `model.safetensors` (942.32 MB, 494 milhões de parâmetros)
 
-Elaborate a concise report, where you describe all the relevant steps and decisions taken to arrive
-at your solution. Include measures of processing time and compression ratio, for several opera-
-tion points (more compression but also more computing time versus less compression but faster).
-Do not forget to test existing compressors and to report the results that you obtain with them
-(compression ratio, time, memory usage).
+**Objetivo:** Encontrar a combinação ótima de Taxa de Compressão (CR) e Tempo de Processamento.
+
+---
+
+## 1. Instruções de Execução
+
+
+1.  `gzip_benchmarking.c`: Calcula a Taxa de Compressão (CR) e gere os ficheiros.
+2.  `run_tests.sh`: Utiliza o comando nativo `time` para medir o tempo de processamento de forma fiável.
+
+### 1.1. Pré-requisitos
+
+1.  **Ficheiro de Dados:** `model.safetensors` no diretório raiz.
+2.  **Utilitários:** Compilador `gcc`, `gzip` e `time`.
+
+### 1.2. Passos de Execução
+
+1.  **Compilação do Código C:**
+    ```bash
+    gcc gzip_benchmarking.c -o gzip_benchmarking
+    ```
+
+2.  **Execução dos Testes:**
+    O script irá correr os testes Gzip nos níveis -1 (Velocidade) e -9 (Taxa Máxima).
+
+    ```bash
+    ./run_tests.sh
+    ```
+
+
+---
