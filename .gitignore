@@ -23,3 +23,5 @@ bin/
 # Ignorar pasta do vscode
 .vscode
 .DS_Store
+
+lab-work-3/model.safetensors
