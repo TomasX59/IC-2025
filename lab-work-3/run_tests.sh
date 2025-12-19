@@ -1,31 +1,67 @@
 #!/bin/bash
 
-FILENAME="model.safetensors"
-COMPRESSED_FILENAME="${FILENAME}.gz"
-EXECUTABLE="./gzip_benchmarking"
+INPUT_FILE="./res/model.safetensors"
+EXECUTABLE="./stcompress"
 
-# --- Teste de Nível -1 (Velocidade) ---
+# Check if input file exists
+if [ ! -f "$INPUT_FILE" ]; then
+    echo "Error: Input file '$INPUT_FILE' not found"
+    exit 1
+fi
+
+# Check if executable exists
+if [ ! -f "$EXECUTABLE" ]; then
+    echo "Building project..."
+    make
+fi
+
 echo "=================================================="
-echo "           PONTO DE OPERAÇÃO: Nível -1 (Velocidade)"
+echo "           Running all compression algorithms"
 echo "=================================================="
-echo "1. MEDIÇÃO DE TEMPO (COMPRESSÃO):"
-time $EXECUTABLE -1
-echo "--------------------------------------------------"
-echo "2. MEDIÇÃO DE TEMPO (DESCOMPRESSÃO):"
-# O ficheiro original foi restaurado pelo passo anterior, então comprimimos de novo apenas para o tempo
-gzip -f -1 $FILENAME # Cria o .gz para o teste de descompressão
-time gzip -f -d $COMPRESSED_FILENAME
 echo ""
 
-# --- Teste de Nível -9 (Taxa Máxima) ---
+# --- Arithmetic ---
 echo "=================================================="
-echo "           PONTO DE OPERAÇÃO: Nível -9 (Taxa Máxima)"
+echo "                    ARITHMETIC"
 echo "=================================================="
-echo "1. MEDIÇÃO DE TEMPO (COMPRESSÃO):"
-time $EXECUTABLE -9
-echo "--------------------------------------------------"
-echo "2. MEDIÇÃO DE TEMPO (DESCOMPRESSÃO):"
-# O ficheiro original foi restaurado pelo passo anterior, então comprimimos de novo apenas para o tempo
-gzip -f -9 $FILENAME # Cria o .gz para o teste de descompressão
-time gzip -f -d $COMPRESSED_FILENAME
+$EXECUTABLE -a arithmetic -i $INPUT_FILE
 echo ""
+
+# --- Optimized Arithmetic ---
+echo "=================================================="
+echo "              OPTIMIZED ARITHMETIC"
+echo "=================================================="
+$EXECUTABLE -a optarithm -i $INPUT_FILE
+echo ""
+
+# --- Huffman ---
+echo "=================================================="
+echo "                     HUFFMAN"
+echo "=================================================="
+$EXECUTABLE -a huffman -i $INPUT_FILE
+echo ""
+
+# --- LZ77 ---
+echo "=================================================="
+echo "                      LZ77"
+echo "=================================================="
+$EXECUTABLE -a lz77 -i $INPUT_FILE
+echo ""
+
+# --- Gzip (level 9, default) ---
+echo "=================================================="
+echo "                   GZIP (level 9)"
+echo "=================================================="
+$EXECUTABLE -a gzip -i $INPUT_FILE
+echo ""
+
+# --- Gzip level 1 (fast) ---
+echo "=================================================="
+echo "                   GZIP (level 1)"
+echo "=================================================="
+$EXECUTABLE -a gzip -c 1 -i $INPUT_FILE
+echo ""
+
+echo "=================================================="
+echo "                  ALL TESTS COMPLETE"
+echo "=================================================="

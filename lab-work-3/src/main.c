@@ -29,16 +29,18 @@ typedef struct
   char *input_path;
   size_t memory_limit_mb;
   int memory_limit_set;
+  int compression_level;
 } ProgramArgs;
 
 static void print_usage(const char *prog_name)
 {
-  printf("Usage: %s -a <algorithm> [-i <input_file>] [-m <memory_mb>]\n", prog_name);
+  printf("Usage: %s -a <algorithm> [-i <input_file>] [-m <memory_mb>] [-c <level>]\n", prog_name);
   printf("\n");
   printf("Options:\n");
   printf("  -a <algorithm>   Compression algorithms: optarithm, arithmetic, huffman, lz77, gzip\n");
   printf("  -i <input_file>  Input file path (default: %s)\n", DEFAULT_INPUT_PATH);
   printf("  -m <memory_mb>   Memory limit in MB (optional)\n");
+  printf("  -c <level>       Gzip compression level 1-9 (default: 9)\n");
   printf("  -h               Show this help message\n");
   printf("\n");
   printf("Algorithms:\n");
@@ -46,7 +48,7 @@ static void print_usage(const char *prog_name)
   printf("  arithmetic     - Best compression ratio (slow)\n");
   printf("  huffman        - Balanced compression and speed\n");
   printf("  lz77           - Best speed (lower compression)\n");
-  printf("  gzip           - System gzip (level 9)\n");
+  printf("  gzip           - System gzip (default level 9)\n");
 }
 
 static Algorithm parse_algorithm(const char *str)
@@ -103,6 +105,7 @@ static int parse_args(int argc, char *argv[], ProgramArgs *args)
   args->input_path = DEFAULT_INPUT_PATH;
   args->memory_limit_mb = 0;
   args->memory_limit_set = 0;
+  args->compression_level = 9;
 
   for (int i = 1; i < argc; i++)
   {
@@ -120,6 +123,15 @@ static int parse_args(int argc, char *argv[], ProgramArgs *args)
     {
       args->memory_limit_mb = (size_t)atol(argv[++i]);
       args->memory_limit_set = 1;
+    }
+    else if (strcmp(argv[i], "-c") == 0 && i + 1 < argc)
+    {
+      args->compression_level = atoi(argv[++i]);
+      if (args->compression_level < 1 || args->compression_level > 9)
+      {
+        fprintf(stderr, "Error: Compression level must be 1-9\n");
+        return -1;
+      }
     }
     else if (strcmp(argv[i], "-h") == 0)
     {
@@ -238,8 +250,11 @@ int main(int argc, char *argv[])
   // Generate output paths
   char compressed_path[512];
   char decompressed_path[512];
-  snprintf(compressed_path, sizeof(compressed_path), "%s%s_compressed.safetensor", TMP_DIR, algorithm_id(args.algorithm));
-  snprintf(decompressed_path, sizeof(decompressed_path), "%s%s_decompressed.safetensor", TMP_DIR, algorithm_id(args.algorithm));
+  snprintf(
+      compressed_path, sizeof(compressed_path), "%s%s_compressed.safetensor", TMP_DIR, algorithm_id(args.algorithm));
+  snprintf(
+      decompressed_path, sizeof(decompressed_path), "%s%s_decompressed.safetensor", TMP_DIR,
+      algorithm_id(args.algorithm));
   ctx.compressed_path = compressed_path;
   ctx.decompressed_path = decompressed_path;
 
@@ -263,7 +278,7 @@ int main(int argc, char *argv[])
     ret = lz77_compress(&ctx);
     break;
   case ALG_GZIP:
-    ret = gzip_compress(&ctx);
+    ret = gzip_compress(&ctx, args.compression_level);
     break;
   default:
     ret = -1;

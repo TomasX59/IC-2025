@@ -5,14 +5,14 @@
 
 #define MAX_COMMAND_LEN 1024
 
-int gzip_compress(CompressionContext *ctx)
+int gzip_compress(CompressionContext *ctx, int level)
 {
   char cmd[MAX_COMMAND_LEN];
 
   if (ctx->progress_callback) ctx->progress_callback(0, "Compressing with gzip...");
 
   // Use gzip -c to read file directly and output to stdout
-  snprintf(cmd, sizeof(cmd), "gzip -9 -c \"%s\" > \"%s\"", ctx->input_path, ctx->compressed_path);
+  snprintf(cmd, sizeof(cmd), "gzip -%d -c \"%s\" > \"%s\"", level, ctx->input_path, ctx->compressed_path);
 
   if (system(cmd) != 0)
   {
