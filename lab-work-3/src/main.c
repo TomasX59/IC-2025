@@ -297,6 +297,17 @@ int main(int argc, char *argv[])
   result.compression_time_ms = compress_time;
   printf("\n");
 
+  // print compression results
+  printf("\n");
+  printf("Compression Results\n");
+  printf("=======\n");
+  printf("Original size:      %zu bytes\n", ctx.input_size);
+  printf("Compressed size:    %zu bytes\n", result.compressed_size);
+  printf("Compression ratio:  %.2f%%\n", ((double)result.compressed_size / ctx.input_size) * 100);
+  printf("Compression time:   %.2f s\n", result.compression_time_ms / 1000.0);
+  printf("Peak memory usage:  %zu MB\n", result.peak_memory_mb);
+  printf("\n");
+
   // Start decompression
   double decompress_start = get_time_ms();
 
@@ -343,7 +354,7 @@ int main(int argc, char *argv[])
 
   // Print results
   printf("\n");
-  printf("Results\n");
+  printf("Final Results\n");
   printf("=======\n");
   printf("Algorithm:          %s\n", algorithm_name(args.algorithm));
   printf("Original size:      %zu bytes\n", ctx.input_size);
