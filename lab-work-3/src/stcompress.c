@@ -13,6 +13,12 @@
 #include <sys/sysctl.h>
 #elif defined(__linux__)
 #include <sys/resource.h>
+#include <sys/sysinfo.h>
+#endif
+
+// Para clock_gettime em alguns sistemas
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 199309L
 #endif
 
 //============ File utilities ============
