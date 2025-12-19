@@ -6,6 +6,7 @@
 #include "arithmetic.h"
 #include "huffman.h"
 #include "lz77.h"
+#include "optarithm.h"
 #include "stcompress.h"
 
 #define DEFAULT_INPUT_PATH "./res/model.safetensors"
@@ -16,7 +17,8 @@ typedef enum
   ALG_NONE = -1,
   ALG_ARITHMETIC = 0,
   ALG_HUFFMAN = 1,
-  ALG_LZ77 = 2
+  ALG_LZ77 = 2,
+  ALG_OPTM = 3
 } Algorithm;
 
 typedef struct
@@ -32,19 +34,21 @@ static void print_usage(const char *prog_name)
   printf("Usage: %s -a <algorithm> [-i <input_file>] [-m <memory_mb>]\n", prog_name);
   printf("\n");
   printf("Options:\n");
-  printf("  -a <algorithm>   Compression algorithm: arithmetic, huffman, lz77\n");
+  printf("  -a <algorithm>   Compression algorithms: optarithm, arithmetic, huffman, lz77\n");
   printf("  -i <input_file>  Input file path (default: %s)\n", DEFAULT_INPUT_PATH);
   printf("  -m <memory_mb>   Memory limit in MB (optional)\n");
   printf("  -h               Show this help message\n");
   printf("\n");
   printf("Algorithms:\n");
-  printf("  arithmetic  - Best compression ratio (slowest)\n");
-  printf("  huffman     - Balanced compression and speed\n");
-  printf("  lz77        - Best speed (lower compression)\n");
+  printf("  optarithm      - Optmized arithmetic, best compression (slowest)\n");
+  printf("  arithmetic     - Best compression ratio (slow)\n");
+  printf("  huffman        - Balanced compression and speed\n");
+  printf("  lz77           - Best speed (lower compression)\n");
 }
 
 static Algorithm parse_algorithm(const char *str)
 {
+  if (strcmp(str, "optarithm") == 0) return ALG_OPTM;
   if (strcmp(str, "arithmetic") == 0) return ALG_ARITHMETIC;
   if (strcmp(str, "huffman") == 0) return ALG_HUFFMAN;
   if (strcmp(str, "lz77") == 0) return ALG_LZ77;
@@ -57,6 +61,8 @@ static const char *algorithm_name(Algorithm alg)
   {
   case ALG_ARITHMETIC:
     return "Arithmetic";
+  case ALG_OPTM:
+    return "Arithmetic Optimized";
   case ALG_HUFFMAN:
     return "Huffman";
   case ALG_LZ77:
@@ -219,6 +225,9 @@ int main(int argc, char *argv[])
 
   switch (args.algorithm)
   {
+  case ALG_OPTM:
+    ret = optarithm_compress(&ctx);
+    break;
   case ALG_ARITHMETIC:
     ret = arithmetic_compress(&ctx);
     break;
@@ -250,6 +259,9 @@ int main(int argc, char *argv[])
 
   switch (args.algorithm)
   {
+  case ALG_OPTM:
+    ret = optarithm_decompress(&ctx);
+    break;
   case ALG_ARITHMETIC:
     ret = arithmetic_decompress(&ctx);
     break;
@@ -290,7 +302,7 @@ int main(int argc, char *argv[])
   printf("Algorithm:          %s\n", algorithm_name(args.algorithm));
   printf("Original size:      %zu bytes\n", ctx.input_size);
   printf("Compressed size:    %zu bytes\n", result.compressed_size);
-  printf("Compression ratio:  %.2f%%\n", (1.0 - (double)result.compressed_size / ctx.input_size) * 100);
+  printf("Compression ratio:  %.2f%%\n", ((double)result.compressed_size / ctx.input_size) * 100);
   printf("Compression time:   %.2f s\n", result.compression_time_ms / 1000.0);
   printf("Decompression time: %.2f s\n", result.decompression_time_ms / 1000.0);
   printf("Peak memory usage:  %zu MB\n", result.peak_memory_mb);
