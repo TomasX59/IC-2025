@@ -4,8 +4,10 @@
 #include <string.h>
 
 #include "arithmetic.h"
+#include "gzip.h"
 #include "huffman.h"
 #include "lz77.h"
+#include "optarithm.h"
 #include "stcompress.h"
 
 #define DEFAULT_INPUT_PATH "./res/model.safetensors"
@@ -16,7 +18,9 @@ typedef enum
   ALG_NONE = -1,
   ALG_ARITHMETIC = 0,
   ALG_HUFFMAN = 1,
-  ALG_LZ77 = 2
+  ALG_LZ77 = 2,
+  ALG_OPTM = 3,
+  ALG_GZIP = 4
 } Algorithm;
 
 typedef struct
@@ -25,29 +29,35 @@ typedef struct
   char *input_path;
   size_t memory_limit_mb;
   int memory_limit_set;
+  int compression_level;
 } ProgramArgs;
 
 static void print_usage(const char *prog_name)
 {
-  printf("Usage: %s -a <algorithm> [-i <input_file>] [-m <memory_mb>]\n", prog_name);
+  printf("Usage: %s -a <algorithm> [-i <input_file>] [-m <memory_mb>] [-c <level>]\n", prog_name);
   printf("\n");
   printf("Options:\n");
-  printf("  -a <algorithm>   Compression algorithm: arithmetic, huffman, lz77\n");
+  printf("  -a <algorithm>   Compression algorithms: optarithm, arithmetic, huffman, lz77, gzip\n");
   printf("  -i <input_file>  Input file path (default: %s)\n", DEFAULT_INPUT_PATH);
   printf("  -m <memory_mb>   Memory limit in MB (optional)\n");
+  printf("  -c <level>       Gzip compression level 1-9 (default: 9)\n");
   printf("  -h               Show this help message\n");
   printf("\n");
   printf("Algorithms:\n");
-  printf("  arithmetic  - Best compression ratio (slowest)\n");
-  printf("  huffman     - Balanced compression and speed\n");
-  printf("  lz77        - Best speed (lower compression)\n");
+  printf("  optarithm      - Optmized arithmetic, best compression (slowest)\n");
+  printf("  arithmetic     - Best compression ratio (slow)\n");
+  printf("  huffman        - Balanced compression and speed\n");
+  printf("  lz77           - Best speed (lower compression)\n");
+  printf("  gzip           - System gzip (default level 9)\n");
 }
 
 static Algorithm parse_algorithm(const char *str)
 {
+  if (strcmp(str, "optarithm") == 0) return ALG_OPTM;
   if (strcmp(str, "arithmetic") == 0) return ALG_ARITHMETIC;
   if (strcmp(str, "huffman") == 0) return ALG_HUFFMAN;
   if (strcmp(str, "lz77") == 0) return ALG_LZ77;
+  if (strcmp(str, "gzip") == 0) return ALG_GZIP;
   return ALG_NONE;
 }
 
@@ -57,12 +67,35 @@ static const char *algorithm_name(Algorithm alg)
   {
   case ALG_ARITHMETIC:
     return "Arithmetic";
+  case ALG_OPTM:
+    return "Arithmetic Optimized";
   case ALG_HUFFMAN:
     return "Huffman";
   case ALG_LZ77:
     return "LZ77";
+  case ALG_GZIP:
+    return "Gzip";
   default:
     return "Unknown";
+  }
+}
+
+static const char *algorithm_id(Algorithm alg)
+{
+  switch (alg)
+  {
+  case ALG_ARITHMETIC:
+    return "arithmetic";
+  case ALG_OPTM:
+    return "optarithm";
+  case ALG_HUFFMAN:
+    return "huffman";
+  case ALG_LZ77:
+    return "lz77";
+  case ALG_GZIP:
+    return "gzip";
+  default:
+    return "unknown";
   }
 }
 
@@ -72,6 +105,7 @@ static int parse_args(int argc, char *argv[], ProgramArgs *args)
   args->input_path = DEFAULT_INPUT_PATH;
   args->memory_limit_mb = 0;
   args->memory_limit_set = 0;
+  args->compression_level = 9;
 
   for (int i = 1; i < argc; i++)
   {
@@ -89,6 +123,15 @@ static int parse_args(int argc, char *argv[], ProgramArgs *args)
     {
       args->memory_limit_mb = (size_t)atol(argv[++i]);
       args->memory_limit_set = 1;
+    }
+    else if (strcmp(argv[i], "-c") == 0 && i + 1 < argc)
+    {
+      args->compression_level = atoi(argv[++i]);
+      if (args->compression_level < 1 || args->compression_level > 9)
+      {
+        fprintf(stderr, "Error: Compression level must be 1-9\n");
+        return -1;
+      }
     }
     else if (strcmp(argv[i], "-h") == 0)
     {
@@ -207,8 +250,11 @@ int main(int argc, char *argv[])
   // Generate output paths
   char compressed_path[512];
   char decompressed_path[512];
-  snprintf(compressed_path, sizeof(compressed_path), "%s%s.compressed", TMP_DIR, algorithm_name(args.algorithm));
-  snprintf(decompressed_path, sizeof(decompressed_path), "%s%s.decompressed", TMP_DIR, algorithm_name(args.algorithm));
+  snprintf(
+      compressed_path, sizeof(compressed_path), "%s%s_compressed.safetensor", TMP_DIR, algorithm_id(args.algorithm));
+  snprintf(
+      decompressed_path, sizeof(decompressed_path), "%s%s_decompressed.safetensor", TMP_DIR,
+      algorithm_id(args.algorithm));
   ctx.compressed_path = compressed_path;
   ctx.decompressed_path = decompressed_path;
 
@@ -219,6 +265,9 @@ int main(int argc, char *argv[])
 
   switch (args.algorithm)
   {
+  case ALG_OPTM:
+    ret = optarithm_compress(&ctx);
+    break;
   case ALG_ARITHMETIC:
     ret = arithmetic_compress(&ctx);
     break;
@@ -227,6 +276,9 @@ int main(int argc, char *argv[])
     break;
   case ALG_LZ77:
     ret = lz77_compress(&ctx);
+    break;
+  case ALG_GZIP:
+    ret = gzip_compress(&ctx, args.compression_level);
     break;
   default:
     ret = -1;
@@ -245,11 +297,25 @@ int main(int argc, char *argv[])
   result.compression_time_ms = compress_time;
   printf("\n");
 
+  // print compression results
+  printf("\n");
+  printf("Compression Results\n");
+  printf("=======\n");
+  printf("Original size:      %zu bytes\n", ctx.input_size);
+  printf("Compressed size:    %zu bytes\n", result.compressed_size);
+  printf("Compression ratio:  %.2f%%\n", ((double)result.compressed_size / ctx.input_size) * 100);
+  printf("Compression time:   %.2f s\n", result.compression_time_ms / 1000.0);
+  printf("Peak memory usage:  %zu MB\n", result.peak_memory_mb);
+  printf("\n");
+
   // Start decompression
   double decompress_start = get_time_ms();
 
   switch (args.algorithm)
   {
+  case ALG_OPTM:
+    ret = optarithm_decompress(&ctx);
+    break;
   case ALG_ARITHMETIC:
     ret = arithmetic_decompress(&ctx);
     break;
@@ -258,6 +324,9 @@ int main(int argc, char *argv[])
     break;
   case ALG_LZ77:
     ret = lz77_decompress(&ctx);
+    break;
+  case ALG_GZIP:
+    ret = gzip_decompress(&ctx);
     break;
   default:
     ret = -1;
@@ -285,12 +354,12 @@ int main(int argc, char *argv[])
 
   // Print results
   printf("\n");
-  printf("Results\n");
+  printf("Final Results\n");
   printf("=======\n");
   printf("Algorithm:          %s\n", algorithm_name(args.algorithm));
   printf("Original size:      %zu bytes\n", ctx.input_size);
   printf("Compressed size:    %zu bytes\n", result.compressed_size);
-  printf("Compression ratio:  %.2f%%\n", (1.0 - (double)result.compressed_size / ctx.input_size) * 100);
+  printf("Compression ratio:  %.2f%%\n", ((double)result.compressed_size / ctx.input_size) * 100);
   printf("Compression time:   %.2f s\n", result.compression_time_ms / 1000.0);
   printf("Decompression time: %.2f s\n", result.decompression_time_ms / 1000.0);
   printf("Peak memory usage:  %zu MB\n", result.peak_memory_mb);

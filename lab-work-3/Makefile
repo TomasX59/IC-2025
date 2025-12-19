@@ -11,7 +11,8 @@ SRCS = $(SRC_DIR)/main.c \
        $(SRC_DIR)/arithmetic.c \
        $(SRC_DIR)/optarithm.c \
        $(SRC_DIR)/huffman.c \
-       $(SRC_DIR)/lz77.c
+       $(SRC_DIR)/lz77.c \
+       $(SRC_DIR)/gzip.c
 
 OBJS = $(SRCS:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 
@@ -35,7 +36,7 @@ $(OBJ_DIR):
 
 clean:
 	rm -rf $(OBJ_DIR) $(TARGET)
-	rm -f tmp/*.compressed tmp/*.decompressed
+	rm -f tmp/*_compressed.safetensor tmp/*_decompressed.safetensor
 
 run-arithmetic: $(TARGET)
 	./$(TARGET) -a arithmetic -i ./res/model.safetensors
@@ -49,6 +50,9 @@ run-huffman: $(TARGET)
 run-lz77: $(TARGET)
 	./$(TARGET) -a lz77 -i ./res/model.safetensors
 
+run-gzip: $(TARGET)
+	./$(TARGET) -a gzip -i ./res/model.safetensors
+
 help:
 	@echo "Usage:"
 	@echo "  make                 - Build the project"
@@ -56,10 +60,11 @@ help:
 	@echo "  make clean           - Remove build artifacts"
 	@echo "  make run-arithmetic  - Run with arithmetic coding"
 	@echo "  make run-optarithm   - Run with arithmetic optmized coding"
-	@echo "  make run-huffman     - Run with Huffman coding"
-	@echo "  make run-lz77        - Run with LZ77"
+	@echo "  make run-huffman     - Run with huffman coding"
+	@echo "  make run-lz77        - Run with lz77"
+	@echo "  make run-gzip        - Run with gzip"
 	@echo ""
 	@echo "Program usage:"
 	@echo "  ./stcompress -a <algorithm> [-i <input_file>] [-m <memory_mb>]"
 	@echo ""
-	@echo "Algorithms: arithmetic, optarithm, huffman, lz77"
+	@echo "Algorithms: arithmetic, optarithm, huffman, lz77, gzip"
