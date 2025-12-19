@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "arithmetic.h"
+#include "gzip.h"
 #include "huffman.h"
 #include "lz77.h"
 #include "optarithm.h"
@@ -18,7 +19,8 @@ typedef enum
   ALG_ARITHMETIC = 0,
   ALG_HUFFMAN = 1,
   ALG_LZ77 = 2,
-  ALG_OPTM = 3
+  ALG_OPTM = 3,
+  ALG_GZIP = 4
 } Algorithm;
 
 typedef struct
@@ -34,7 +36,7 @@ static void print_usage(const char *prog_name)
   printf("Usage: %s -a <algorithm> [-i <input_file>] [-m <memory_mb>]\n", prog_name);
   printf("\n");
   printf("Options:\n");
-  printf("  -a <algorithm>   Compression algorithms: optarithm, arithmetic, huffman, lz77\n");
+  printf("  -a <algorithm>   Compression algorithms: optarithm, arithmetic, huffman, lz77, gzip\n");
   printf("  -i <input_file>  Input file path (default: %s)\n", DEFAULT_INPUT_PATH);
   printf("  -m <memory_mb>   Memory limit in MB (optional)\n");
   printf("  -h               Show this help message\n");
@@ -44,6 +46,7 @@ static void print_usage(const char *prog_name)
   printf("  arithmetic     - Best compression ratio (slow)\n");
   printf("  huffman        - Balanced compression and speed\n");
   printf("  lz77           - Best speed (lower compression)\n");
+  printf("  gzip           - System gzip (level 9)\n");
 }
 
 static Algorithm parse_algorithm(const char *str)
@@ -52,6 +55,7 @@ static Algorithm parse_algorithm(const char *str)
   if (strcmp(str, "arithmetic") == 0) return ALG_ARITHMETIC;
   if (strcmp(str, "huffman") == 0) return ALG_HUFFMAN;
   if (strcmp(str, "lz77") == 0) return ALG_LZ77;
+  if (strcmp(str, "gzip") == 0) return ALG_GZIP;
   return ALG_NONE;
 }
 
@@ -67,8 +71,29 @@ static const char *algorithm_name(Algorithm alg)
     return "Huffman";
   case ALG_LZ77:
     return "LZ77";
+  case ALG_GZIP:
+    return "Gzip";
   default:
     return "Unknown";
+  }
+}
+
+static const char *algorithm_id(Algorithm alg)
+{
+  switch (alg)
+  {
+  case ALG_ARITHMETIC:
+    return "arithmetic";
+  case ALG_OPTM:
+    return "optarithm";
+  case ALG_HUFFMAN:
+    return "huffman";
+  case ALG_LZ77:
+    return "lz77";
+  case ALG_GZIP:
+    return "gzip";
+  default:
+    return "unknown";
   }
 }
 
@@ -213,8 +238,8 @@ int main(int argc, char *argv[])
   // Generate output paths
   char compressed_path[512];
   char decompressed_path[512];
-  snprintf(compressed_path, sizeof(compressed_path), "%s%s.compressed", TMP_DIR, algorithm_name(args.algorithm));
-  snprintf(decompressed_path, sizeof(decompressed_path), "%s%s.decompressed", TMP_DIR, algorithm_name(args.algorithm));
+  snprintf(compressed_path, sizeof(compressed_path), "%s%s_compressed.safetensor", TMP_DIR, algorithm_id(args.algorithm));
+  snprintf(decompressed_path, sizeof(decompressed_path), "%s%s_decompressed.safetensor", TMP_DIR, algorithm_id(args.algorithm));
   ctx.compressed_path = compressed_path;
   ctx.decompressed_path = decompressed_path;
 
@@ -236,6 +261,9 @@ int main(int argc, char *argv[])
     break;
   case ALG_LZ77:
     ret = lz77_compress(&ctx);
+    break;
+  case ALG_GZIP:
+    ret = gzip_compress(&ctx);
     break;
   default:
     ret = -1;
@@ -270,6 +298,9 @@ int main(int argc, char *argv[])
     break;
   case ALG_LZ77:
     ret = lz77_decompress(&ctx);
+    break;
+  case ALG_GZIP:
+    ret = gzip_decompress(&ctx);
     break;
   default:
     ret = -1;
